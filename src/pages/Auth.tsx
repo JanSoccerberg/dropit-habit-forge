@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Auth() {
   const nav = useNavigate();
-  const { signIn, signUp } = useSupabaseAuth();
+  const { signIn, signUp, signInWithGoogle } = useSupabaseAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,8 +96,23 @@ export default function Auth() {
             )}
           </CardContent>
         </Card>
+        <div className="pt-1">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={async () => {
+              const { error } = await signInWithGoogle();
+              if (error) {
+                toast({ title: "Google Login fehlgeschlagen", description: error.message, variant: "destructive" });
+              } else {
+                toast({ title: "Weiterleitung zu Google..." });
+              }
+            }}
+          >
+            Mit Google anmelden
+          </Button>
+        </div>
       </div>
     </MobileShell>
   );
 }
-

@@ -43,11 +43,33 @@ export function useSupabaseAuth() {
     return { error };
   };
 
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
+  const cleanupAuthState = () => {
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('supabase.auth.') || key.includes('sb-')) localStorage.removeItem(key);
+      });
+      Object.keys(sessionStorage).forEach((key) => {
+        if (key.startsWith('supabase.auth.') || key.includes('sb-')) sessionStorage.removeItem(key);
+      });
+    } catch {}
+  };
+
+  const signInWithGoogle = async () => {
+    cleanupAuthState();
+    try { await supabase.auth.signOut({ scope: 'global' }); } catch {}
+    const redirectTo = `${window.location.origin}/`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
     return { error };
   };
 
-  return { session, user, initializing, signIn, signUp, signOut };
+  const signOut = async () => {
+    cleanupAuthState();
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    return { error };
+  };
+  return { session, user, initializing, signIn, signUp, signInWithGoogle, signOut };
 }
 
