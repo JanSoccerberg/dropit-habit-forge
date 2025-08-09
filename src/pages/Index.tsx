@@ -1,13 +1,43 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import SEO from "@/components/SEO";
+import MobileShell from "@/components/layout/MobileShell";
+import { Button } from "@/components/ui/button";
+import { useChallengesStore } from "@/store/challenges";
+import ChallengeCard from "@/components/ChallengeCard";
+import { NavLink } from "react-router-dom";
 
 const Index = () => {
+  const participations = useChallengesStore((s) => s.participations);
+  const userId = useChallengesStore((s) => s.user.id);
+
+  const myChallengeIds = Object.values(participations)
+    .filter((p) => p.userId === userId)
+    .map((p) => p.challengeId);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <MobileShell title="DropIt">
+      <SEO title="DropIt – Übersicht" description="Alle aktiven Challenges im Blick." />
+
+      {myChallengeIds.length === 0 ? (
+        <div className="text-center space-y-5 py-12">
+          <h2 className="text-2xl font-bold">Starte deine erste Challenge</h2>
+          <p className="text-muted-foreground">Brich schlechte Gewohnheiten mit täglichem Check‑in.</p>
+          <div className="flex gap-3 justify-center">
+            <Button asChild variant="hero">
+              <NavLink to="/create">Neue Challenge</NavLink>
+            </Button>
+            <Button asChild variant="outline">
+              <NavLink to="/join">Challenge beitreten</NavLink>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {myChallengeIds.map((id) => (
+            <ChallengeCard key={id} id={id} />
+          ))}
+        </div>
+      )}
+    </MobileShell>
   );
 };
 
