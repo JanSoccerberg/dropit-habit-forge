@@ -1,3 +1,4 @@
+
 import SEO from "@/components/SEO";
 import MobileShell from "@/components/layout/MobileShell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useState } from "react";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -20,6 +24,7 @@ export default function ChallengeDetail() {
   const participation = useChallengesStore((s) => s.getUserParticipation(id!));
   const user = useChallengesStore((s) => s.user);
   const checkIns = useChallengesStore((s) => s.checkIns);
+  const { user: authUser } = useSupabaseAuth();
 
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<"success" | "fail">("success");
@@ -37,9 +42,26 @@ export default function ChallengeDetail() {
   const today = todayStr();
   const todayStatus = getStatus(today);
 
-  const onConfirm = () => {
+  const onConfirm = async () => {
+    // Persist to DB if logged in
+    if (!authUser) {
+      toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
+    } else {
+      const { error } = await supabase.rpc("upsert_check_in", {
+        p_challenge_id: id,
+        p_status: result,
+        p_screenshot_name: fileName ?? null,
+      });
+      if (error) {
+        toast({ title: "Check‑in fehlgeschlagen", description: error.message, variant: "destructive" });
+        return;
+      }
+    }
+
+    // Always update local for current UI
     api.checkIn(id!, result, fileName);
     setOpen(false);
+    toast({ title: "Check‑in gespeichert" });
   };
 
   return (
@@ -137,3 +159,4 @@ export default function ChallengeDetail() {
     </MobileShell>
   );
 }
+

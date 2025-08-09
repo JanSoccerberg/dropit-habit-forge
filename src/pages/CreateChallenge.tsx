@@ -11,9 +11,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/store/challenges";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 
 export default function CreateChallenge() {
   const nav = useNavigate();
+  const { user } = useSupabaseAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -23,8 +26,47 @@ export default function CreateChallenge() {
   const [stakeText, setStakeText] = useState("");
   const [stakeRule, setStakeRule] = useState("per-missed-day");
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      toast({ title: "Bitte einloggen", description: "Zum Speichern der Challenge ist ein Login nötig.", variant: "destructive" });
+      nav("/auth");
+      return;
+    }
+
+    // Persist in Supabase (server generates join_code)
+    const { data: created, error } = await supabase
+      .from("challenges")
+      .insert({
+        title,
+        description: description || null,
+        start_date: startDate,
+        end_date: endDate,
+        check_in_time: checkInTime,
+        require_screenshot: requireScreenshot,
+        stake_text: stakeText || null,
+        stake_rule: stakeRule as any,
+        creator_id: user.id,
+      })
+      .select("id, join_code")
+      .maybeSingle();
+
+    if (error || !created) {
+      toast({ title: "Fehler beim Speichern", description: error?.message ?? "Unbekannter Fehler", variant: "destructive" });
+      return;
+    }
+
+    // Ensure creator is a member
+    const { error: memErr } = await supabase
+      .from("challenge_members")
+      .insert({ challenge_id: created.id, user_id: user.id });
+
+    if (memErr) {
+      console.warn("Creator membership insert failed:", memErr);
+    }
+
+    // Update local state for current UI flow
     const { id, joinCode } = api.createChallenge({
       title,
       description,
@@ -35,7 +77,8 @@ export default function CreateChallenge() {
       stakeText,
       stakeRule: stakeRule as any,
     });
-    toast({ title: "Challenge erstellt", description: `Code: ${joinCode}` });
+
+    toast({ title: "Challenge erstellt", description: `Code: ${created.join_code ?? joinCode}` });
     nav(`/challenge/${id}`);
   };
 

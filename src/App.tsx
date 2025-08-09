@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +11,7 @@ import CreateChallenge from "./pages/CreateChallenge";
 import JoinChallenge from "./pages/JoinChallenge";
 import ChallengeDetail from "./pages/ChallengeDetail";
 import Profile from "./pages/Profile";
+import Auth from "./pages/Auth";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +28,7 @@ const App = () => (
             <Route path="/join" element={<JoinChallenge />} />
             <Route path="/challenge/:id" element={<ChallengeDetail />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/auth" element={<Auth />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -36,3 +39,4 @@ const App = () => (
 );
 
 export default App;
+
