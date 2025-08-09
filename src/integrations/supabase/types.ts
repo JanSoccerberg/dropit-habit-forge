@@ -14,16 +14,232 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      challenge_members: {
+        Row: {
+          challenge_id: string
+          id: string
+          joined_at: string
+          role: Database["public"]["Enums"]["member_role"]
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          id?: string
+          joined_at?: string
+          role: Database["public"]["Enums"]["member_role"]
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["member_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenge_members_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenge_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      challenges: {
+        Row: {
+          bet_description: string | null
+          bet_rule: Database["public"]["Enums"]["bet_rule"]
+          checkin_time: string
+          created_at: string
+          creator_id: string
+          description: string | null
+          end_date: string
+          id: string
+          join_code: string
+          screenshot_required: boolean
+          start_date: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bet_description?: string | null
+          bet_rule: Database["public"]["Enums"]["bet_rule"]
+          checkin_time: string
+          created_at?: string
+          creator_id: string
+          description?: string | null
+          end_date: string
+          id?: string
+          join_code: string
+          screenshot_required?: boolean
+          start_date: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bet_description?: string | null
+          bet_rule?: Database["public"]["Enums"]["bet_rule"]
+          checkin_time?: string
+          created_at?: string
+          creator_id?: string
+          description?: string | null
+          end_date?: string
+          id?: string
+          join_code?: string
+          screenshot_required?: boolean
+          start_date?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_logs: {
+        Row: {
+          challenge_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          challenge_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          challenge_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_logs_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          dark_mode: boolean
+          display_name: string | null
+          id: string
+          locale: string
+          name: string | null
+          push_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          dark_mode?: boolean
+          display_name?: string | null
+          id: string
+          locale?: string
+          name?: string | null
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          dark_mode?: boolean
+          display_name?: string | null
+          id?: string
+          locale?: string
+          name?: string | null
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_unique_join_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_challenge_by_join_code: {
+        Args: { p_join_code: string }
+        Returns: {
+          bet_description: string | null
+          bet_rule: Database["public"]["Enums"]["bet_rule"]
+          checkin_time: string
+          created_at: string
+          creator_id: string
+          description: string | null
+          end_date: string
+          id: string
+          join_code: string
+          screenshot_required: boolean
+          start_date: string
+          title: string
+          updated_at: string
+        }
+      }
+      join_challenge_by_code: {
+        Args: { p_join_code: string }
+        Returns: {
+          bet_description: string | null
+          bet_rule: Database["public"]["Enums"]["bet_rule"]
+          checkin_time: string
+          created_at: string
+          creator_id: string
+          description: string | null
+          end_date: string
+          id: string
+          join_code: string
+          screenshot_required: boolean
+          start_date: string
+          title: string
+          updated_at: string
+        }
+      }
+      rotate_join_code: {
+        Args: { p_challenge_id: string }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      bet_rule: "per_day" | "end_fail"
+      member_role: "creator" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +366,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      bet_rule: ["per_day", "end_fail"],
+      member_role: ["creator", "member"],
+    },
   },
 } as const
