@@ -72,17 +72,6 @@ export default function Profile() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Avatar (URL, optional)</Label>
-            <Input
-              value={user.avatarUrl ?? ""}
-              onChange={async (e) => {
-                api.updateProfile({ avatarUrl: e.target.value });
-                await updateRemote({ avatar_url: e.target.value || null });
-              }}
-              placeholder="https://…"
-            />
-          </div>
-          <div className="space-y-2">
             <Label>Sprache</Label>
             <Select value={user.locale} onValueChange={async (v) => {
               api.updateProfile({ locale: v });
