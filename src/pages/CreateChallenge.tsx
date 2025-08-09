@@ -43,10 +43,10 @@ export default function CreateChallenge() {
         description: description || null,
         start_date: startDate,
         end_date: endDate,
-        check_in_time: checkInTime,
-        require_screenshot: requireScreenshot,
-        stake_text: stakeText || null,
-        stake_rule: stakeRule as any,
+        checkin_time: checkInTime,
+        screenshot_required: requireScreenshot,
+        bet_description: stakeText || null,
+        bet_rule: (stakeRule as any)?.replace?.(/-/g, "_") ?? (stakeRule as any),
         creator_id: user.id,
       })
       .select("id, join_code")
@@ -60,7 +60,7 @@ export default function CreateChallenge() {
     // Ensure creator is a member
     const { error: memErr } = await supabase
       .from("challenge_members")
-      .insert({ challenge_id: created.id, user_id: user.id });
+      .insert({ challenge_id: created.id, user_id: user.id, role: 'creator' });
 
     if (memErr) {
       console.warn("Creator membership insert failed:", memErr);
@@ -79,7 +79,7 @@ export default function CreateChallenge() {
     });
 
     toast({ title: "Challenge erstellt", description: `Code: ${created.join_code ?? joinCode}` });
-    nav(`/challenge/${id}`);
+    nav(`/challenge/${created.id}`);
   };
 
   return (
