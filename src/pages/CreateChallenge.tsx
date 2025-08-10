@@ -35,7 +35,9 @@ export default function CreateChallenge() {
       return;
     }
 
-    // Persist in Supabase (server generates join_code)
+    // Ensure profile exists, then persist in Supabase (server generates join_code)
+    const { error: profErr } = await supabase.rpc("ensure_profile_exists");
+    if (profErr) { toast({ title: "Profil-Setup fehlgeschlagen", description: profErr.message, variant: "destructive" }); return; }
     const { data: created, error } = await supabase
       .from("challenges")
       .insert({

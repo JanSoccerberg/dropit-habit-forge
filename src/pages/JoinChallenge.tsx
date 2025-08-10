@@ -66,26 +66,26 @@ export default function JoinChallenge() {
       return;
     }
 
+    // Sicherstellen, dass ein Profil existiert (für stabile DB-Trigger und RLS)
+    const { error: profErr } = await supabase.rpc("ensure_profile_exists");
+    if (profErr) {
+      toast({ title: "Profil-Setup fehlgeschlagen", description: profErr.message, variant: "destructive" });
+      return;
+    }
+
     const { data, error } = await supabase.rpc("join_challenge_by_code", { p_join_code: c });
     if (error) {
-      toast({ title: "Beitreten fehlgeschlagen", description: error.message, variant: "destructive" });
+      const msg = error.message || "";
+      let desc = error.message;
+      if (msg.includes("INVALID_JOIN_CODE_FORMAT")) desc = "Der Code muss aus 6 Zeichen (A–Z, 0–9) bestehen.";
+      else if (msg.includes("CHALLENGE_NOT_FOUND")) desc = "Challenge mit diesem Code wurde nicht gefunden.";
+      toast({ title: "Beitreten fehlgeschlagen", description: desc, variant: "destructive" });
       return;
     }
 
-    // Update local state for current UI flow (falls Challenge bereits lokal bekannt)
-    const res = api.joinChallengeByCode(c);
-    if ((res as any).error) {
-      // fallback: wenn lokal nicht existiert, navigieren wir zur Detailseite der DB-Challenge
-      const challengeId = (data as any)?.id;
-      if (challengeId) {
-        nav(`/challenge/${challengeId}`);
-        return;
-      }
-      alert((res as any).error);
-      return;
-    }
-
-    nav(`/challenge/${(res as any).id}`);
+    // DB hat die Challenge zurückgegeben: lokal spiegeln und navigieren
+    api.addChallengeFromDB(data as any);
+    nav(`/challenge/${(data as any).id}`);
   };
 
   return (

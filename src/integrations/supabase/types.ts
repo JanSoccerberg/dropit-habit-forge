@@ -192,6 +192,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_profile_exists: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       generate_unique_join_code: {
         Args: Record<PropertyKey, never>
         Returns: string
