@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ export default function ChallengeDetail() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<"success" | "fail">("success");
   const [fileName, setFileName] = useState<string | undefined>(undefined);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
 
   if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">Challenge nicht gefunden.</p></MobileShell>;
 
@@ -41,6 +42,27 @@ export default function ChallengeDetail() {
 
   const today = todayStr();
   const todayStatus = getStatus(today);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCode = async () => {
+      if (!authUser || !id) return;
+      const { data, error } = await supabase
+        .from("challenges")
+        .select("join_code")
+        .eq("id", id)
+        .maybeSingle();
+      if (!cancelled) {
+        if (error) {
+          console.warn("join_code fetch error:", error);
+        } else {
+          setJoinCode(data?.join_code ?? null);
+        }
+      }
+    };
+    fetchCode();
+    return () => { cancelled = true; };
+  }, [authUser, id]);
 
   const onConfirm = async () => {
     // Persist to DB if logged in
@@ -85,6 +107,24 @@ export default function ChallengeDetail() {
             <p className="text-sm">Einsatz: <span className="font-medium">{challenge.stakeText}</span></p>
           </CardContent>
         </Card>
+      )}
+
+      {joinCode && (
+        <section className="space-y-2">
+          <h3 className="font-semibold">Teilen</h3>
+          <div className="flex items-center justify-between border rounded-md p-3">
+            <div>
+              <p className="text-sm">Beitrittscode</p>
+              <p className="font-mono text-lg tracking-wider">{joinCode}</p>
+            </div>
+            <Button variant="secondary" onClick={() => {
+              const url = `${window.location.origin}/join`;
+              const text = `Tritt meiner Challenge bei! Code: ${joinCode} – ${url}`;
+              navigator.clipboard.writeText(text);
+              toast({ title: "Kopiert", description: "Code & Link in Zwischenablage" });
+            }}>Kopieren</Button>
+          </div>
+        </section>
       )}
 
       <section className="space-y-2">

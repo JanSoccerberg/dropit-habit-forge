@@ -58,13 +58,6 @@ export default function CreateChallenge() {
     }
 
     // Ensure creator is a member
-    const { error: memErr } = await supabase
-      .from("challenge_members")
-      .insert({ challenge_id: created.id, user_id: user.id, role: 'creator' });
-
-    if (memErr) {
-      console.warn("Creator membership insert failed:", memErr);
-    }
 
     // Update local state for current UI flow
     const { id, joinCode } = api.createChallenge({

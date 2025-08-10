@@ -17,10 +17,10 @@ type Preview = {
   description: string | null;
   start_date: string;
   end_date: string;
-  check_in_time: string;
-  require_screenshot: boolean;
-  stake_text: string | null;
-  stake_rule: "per-missed-day" | "overall-fail";
+  checkin_time: string;
+  screenshot_required: boolean;
+  bet_description: string | null;
+  bet_rule: "per_missed_day" | "overall_fail";
 } | null;
 
 export default function JoinChallenge() {
@@ -40,7 +40,7 @@ export default function JoinChallenge() {
         return;
       }
       setLoading(true);
-      const { data, error } = await supabase.rpc("get_challenge_by_join_code", { p_code: c });
+      const { data, error } = await supabase.rpc("get_challenge_by_join_code", { p_join_code: c });
       if (!cancelled) {
         if (error) {
           console.warn("get_challenge_by_join_code error:", error);
@@ -66,7 +66,7 @@ export default function JoinChallenge() {
       return;
     }
 
-    const { data, error } = await supabase.rpc("join_challenge_by_code", { p_code: c });
+    const { data, error } = await supabase.rpc("join_challenge_by_code", { p_join_code: c });
     if (error) {
       toast({ title: "Beitreten fehlgeschlagen", description: error.message, variant: "destructive" });
       return;
@@ -76,7 +76,7 @@ export default function JoinChallenge() {
     const res = api.joinChallengeByCode(c);
     if ((res as any).error) {
       // fallback: wenn lokal nicht existiert, navigieren wir zur Detailseite der DB-Challenge
-      const challengeId = (data as any)?.[0]?.challenge_id;
+      const challengeId = (data as any)?.id;
       if (challengeId) {
         nav(`/challenge/${challengeId}`);
         return;
@@ -108,9 +108,9 @@ export default function JoinChallenge() {
             <div className="space-y-1 text-sm">
               <p className="font-medium">{preview?.title ?? previewLocal?.title}</p>
               <p className="text-muted-foreground">Zeitraum: {(preview?.start_date ?? previewLocal?.startDate) as any} – {(preview?.end_date ?? previewLocal?.endDate) as any}</p>
-              <p className="text-muted-foreground">Check‑in täglich bis {(preview?.check_in_time ?? previewLocal?.checkInTime) as any} Uhr</p>
-              <p className="text-muted-foreground">Screenshotpflicht: {(preview?.require_screenshot ?? previewLocal?.requireScreenshot) ? "Ja" : "Nein"}</p>
-              {(preview?.stake_text ?? previewLocal?.stakeText) && <p className="text-muted-foreground">Einsatz: {(preview?.stake_text ?? previewLocal?.stakeText) as any}</p>}
+              <p className="text-muted-foreground">Check‑in täglich bis {(preview?.checkin_time ?? previewLocal?.checkInTime) as any} Uhr</p>
+              <p className="text-muted-foreground">Screenshotpflicht: {(preview?.screenshot_required ?? previewLocal?.requireScreenshot) ? "Ja" : "Nein"}</p>
+              {(preview?.bet_description ?? previewLocal?.stakeText) && <p className="text-muted-foreground">Einsatz: {(preview?.bet_description ?? previewLocal?.stakeText) as any}</p>}
             </div>
           )}
 
