@@ -214,6 +214,14 @@ export type Database = {
           updated_at: string
         }
       }
+      is_creator_of_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: boolean
+      }
+      is_member_of_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: boolean
+      }
       join_challenge_by_code: {
         Args: { p_join_code: string }
         Returns: {
