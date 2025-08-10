@@ -20,7 +20,7 @@ type Preview = {
   checkin_time: string;
   screenshot_required: boolean;
   bet_description: string | null;
-  bet_rule: "per_missed_day" | "overall_fail";
+  bet_rule: "per_day" | "end_fail";
 } | null;
 
 export default function JoinChallenge() {

@@ -23,6 +23,20 @@ interface CreateChallengeInput {
 
 interface API {
   createChallenge(input: CreateChallengeInput): { id: string; joinCode: string };
+  addChallengeFromDB(row: {
+    id: string;
+    title: string;
+    description: string | null;
+    start_date: string;
+    end_date: string;
+    checkin_time: string;
+    screenshot_required: boolean;
+    bet_description: string | null;
+    bet_rule: "per_day" | "end_fail";
+    join_code: string;
+    creator_id: string;
+    created_at: string;
+  }): void;
   joinChallengeByCode(code: string): { id: string } | { error: string };
   findByCode(code: string): Challenge | undefined;
   checkIn(challengeId: string, status: CheckInStatus, screenshotName?: string): void;
@@ -82,6 +96,38 @@ export const useChallengesStore = create<State & API>((set, get) => ({
     }));
 
     return { id, joinCode };
+  },
+
+  addChallengeFromDB: (row) => {
+    const id = row.id;
+    const challenge: Challenge = {
+      id,
+      title: row.title,
+      description: row.description ?? undefined,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      checkInTime: row.checkin_time,
+      requireScreenshot: row.screenshot_required,
+      stakeText: row.bet_description ?? undefined,
+      stakeRule: row.bet_rule === 'per_day' ? 'per-missed-day' : 'overall-fail',
+      joinCode: row.join_code,
+      creatorId: row.creator_id,
+      createdAt: row.created_at,
+    };
+    const userId = get().user.id;
+    const pKey = keyP(id, userId);
+    const participation: Participation = {
+      id: nanoid(),
+      challengeId: id,
+      userId,
+      joinedAt: new Date().toISOString(),
+      streak: 0,
+      reminders: { before1h: false },
+    };
+    set((s) => ({
+      challenges: { ...s.challenges, [id]: challenge },
+      participations: { ...s.participations, [pKey]: participation },
+    }));
   },
 
   joinChallengeByCode: (code) => {
@@ -149,6 +195,7 @@ export type ChallengesAPI = Omit<API, "getChallengeProgress" | "getUserParticipa
 export const api = {
   // This object mirrors calls that would be sent to a backend later
   createChallenge: (input: CreateChallengeInput) => useChallengesStore.getState().createChallenge(input),
+  addChallengeFromDB: (row: any) => useChallengesStore.getState().addChallengeFromDB(row),
   joinChallengeByCode: (code: string) => useChallengesStore.getState().joinChallengeByCode(code),
   findByCode: (code: string) => useChallengesStore.getState().findByCode(code),
   checkIn: (challengeId: string, status: CheckInStatus, screenshotName?: string) =>

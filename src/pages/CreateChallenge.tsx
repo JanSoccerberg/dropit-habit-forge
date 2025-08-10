@@ -46,10 +46,10 @@ export default function CreateChallenge() {
         checkin_time: checkInTime,
         screenshot_required: requireScreenshot,
         bet_description: stakeText || null,
-        bet_rule: (stakeRule as any)?.replace?.(/-/g, "_") ?? (stakeRule as any),
+        bet_rule: stakeRule === "per-missed-day" ? "per_day" : "end_fail",
         creator_id: user.id,
       })
-      .select("id, join_code")
+      .select("id, join_code, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, creator_id, created_at")
       .maybeSingle();
 
     if (error || !created) {
@@ -59,19 +59,10 @@ export default function CreateChallenge() {
 
     // Ensure creator is a member
 
-    // Update local state for current UI flow
-    const { id, joinCode } = api.createChallenge({
-      title,
-      description,
-      startDate,
-      endDate,
-      checkInTime,
-      requireScreenshot,
-      stakeText,
-      stakeRule: stakeRule as any,
-    });
+    // Update local state for current UI flow to reflect DB row
+    api.addChallengeFromDB(created as any);
 
-    toast({ title: "Challenge erstellt", description: `Code: ${created.join_code ?? joinCode}` });
+    toast({ title: "Challenge erstellt", description: `Code: ${created.join_code}` });
     nav(`/challenge/${created.id}`);
   };
 
