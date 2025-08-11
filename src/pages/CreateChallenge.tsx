@@ -59,7 +59,8 @@ export default function CreateChallenge() {
       return;
     }
 
-    // Ensure creator is a member
+    // Sync local store user id with Supabase to avoid race conditions
+    api.updateProfile({ id: user.id });
 
     // Update local state for current UI flow to reflect DB row
     api.addChallengeFromDB(created as any);

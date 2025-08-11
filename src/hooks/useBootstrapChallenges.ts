@@ -12,11 +12,13 @@ export function useBootstrapChallenges() {
   const { user } = useSupabaseAuth();
   const loadedRef = useRef<string | null>(null);
   const challenges = useChallengesStore((s) => s.challenges);
+  const storeUserId = useChallengesStore((s) => s.user.id);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (!user) return;
+      if (storeUserId !== user.id) return;
       // Verhindere wiederholtes Laden für denselben User
       if (loadedRef.current === user.id && Object.keys(challenges).length > 0) return;
 
@@ -69,5 +71,5 @@ export function useBootstrapChallenges() {
 
     run();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, storeUserId]);
 }

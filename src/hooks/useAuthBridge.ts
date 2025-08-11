@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "./useSupabaseAuth";
 import { api, useChallengesStore } from "@/store/challenges";
@@ -16,16 +16,23 @@ type ProfileRow = {
 export function useAuthBridge() {
   const { user } = useSupabaseAuth();
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       setProfile(null);
+      api.resetApp();
       return;
     }
 
     let cancelled = false;
 
     const load = async () => {
+      // Reset local state if the authenticated user changed
+      if (prevUserIdRef.current !== user.id) {
+        api.resetApp();
+        prevUserIdRef.current = user.id;
+      }
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
