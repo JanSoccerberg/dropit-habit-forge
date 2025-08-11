@@ -30,8 +30,9 @@ export default function ChallengeDetail() {
   const [result, setResult] = useState<"success" | "fail">("success");
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [joinCode, setJoinCode] = useState<string | null>(null);
+  const [attemptedFetch, setAttemptedFetch] = useState(false);
 
-  if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">Challenge nicht gefunden.</p></MobileShell>;
+  if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">{authUser && !attemptedFetch ? "Lade Challenge…" : "Challenge nicht gefunden."}</p></MobileShell>;
 
   const days = daysBetween(challenge.startDate, challenge.endDate);
   const userId = user.id;
@@ -42,6 +43,28 @@ export default function ChallengeDetail() {
 
   const today = todayStr();
   const todayStatus = getStatus(today);
+
+  // Fallback: Falls Challenge lokal fehlt, aus der DB (Mitgliedschaft) nachladen
+  useEffect(() => {
+    let cancelled = false;
+    const loadIfMissing = async () => {
+      if (challenge || !authUser || !id) return;
+      const { data } = await supabase
+        .from("challenge_members")
+        .select("challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at )")
+        .eq("challenge_id", id)
+        .maybeSingle();
+
+    if (cancelled) return;
+    const ch = (data as any)?.challenges;
+    if (ch && ch.id) {
+      api.addChallengeFromDB(ch);
+    }
+    setAttemptedFetch(true);
+    };
+    loadIfMissing();
+    return () => { cancelled = true; };
+  }, [challenge, authUser, id]);
 
   useEffect(() => {
     let cancelled = false;

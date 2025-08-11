@@ -13,12 +13,15 @@ import ChallengeDetail from "./pages/ChallengeDetail";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import { useAuthBridge } from "@/hooks/useAuthBridge";
+import { useBootstrapChallenges } from "@/hooks/useBootstrapChallenges";
  
  const queryClient = new QueryClient();
 
 const App = () => {
   // Bridge Auth/Profile global für die App (synchronisiert Supabase ⟷ lokaler Store)
   useAuthBridge();
+  // Bootstrap: lade alle DB‑Challenges des Users in den lokalen Store
+  useBootstrapChallenges();
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
