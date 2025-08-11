@@ -20,26 +20,49 @@ export function useBootstrapChallenges() {
       // Verhindere wiederholtes Laden für denselben User
       if (loadedRef.current === user.id && Object.keys(challenges).length > 0) return;
 
-      const { data, error } = await supabase
-        .from("challenge_members")
-        .select(
-          "challenge_id, challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at )"
-        );
+      // Lade sowohl Challenges über Mitgliedschaften (challenge_members) als auch Challenges,
+      // die der Nutzer selbst erstellt hat (creator_id = user.id). Beide Quellen werden dedupliziert zusammengeführt.
+      const [membersRes, creatorRes] = await Promise.all([
+        supabase
+          .from("challenge_members")
+          .select(
+            "challenge_id, challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at )"
+          )
+          .eq("user_id", user.id),
+        supabase
+          .from("challenges")
+          .select(
+            "id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at"
+          )
+          .eq("creator_id", user.id),
+      ]);
 
       if (cancelled) return;
 
-      if (error) {
-        console.warn("Bootstrap: Laden der Challenges fehlgeschlagen:", error);
-        return;
+      if (membersRes.error || creatorRes.error) {
+        if (membersRes.error) console.warn("Bootstrap: Laden der Mitgliedschafts-Challenges fehlgeschlagen:", membersRes.error);
+        if (creatorRes.error) console.warn("Bootstrap: Laden der eigenen Challenges fehlgeschlagen:", creatorRes.error);
+        // Wir fahren fort und nutzen, was vorhanden ist
       }
 
-      const rows = (data || []) as any[];
+      const map = new Map<string, any>();
+
+      const rows = (membersRes.data || []) as any[];
       rows.forEach((r) => {
         const ch = r?.challenges;
-        if (ch && ch.id) {
-          api.addChallengeFromDB(ch);
+        if (ch && ch.id && !map.has(ch.id)) {
+          map.set(ch.id, ch);
         }
       });
+
+      const creatorRows = (creatorRes.data || []) as any[];
+      creatorRows.forEach((ch) => {
+        if (ch && ch.id && !map.has(ch.id)) {
+          map.set(ch.id, ch);
+        }
+      });
+
+      map.forEach((ch) => api.addChallengeFromDB(ch));
 
       loadedRef.current = user.id;
     };
