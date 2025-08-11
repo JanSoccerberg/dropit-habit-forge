@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useChallengeStats } from "@/hooks/useChallengeStats";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -32,6 +33,9 @@ export default function ChallengeDetail() {
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [attemptedFetch, setAttemptedFetch] = useState(false);
 
+  // New: load stats (leaderboards + calendar) from DB
+  const stats = useChallengeStats(id);
+
   if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">{authUser && !attemptedFetch ? "Lade Challenge…" : "Challenge nicht gefunden."}</p></MobileShell>;
 
   const days = daysBetween(challenge.startDate, challenge.endDate);
@@ -44,6 +48,27 @@ export default function ChallengeDetail() {
   const today = todayStr();
   const todayStatus = getStatus(today);
 
+  // Merge DB calendar into local store for current user
+  useEffect(() => {
+    if (!stats.calendar.data || !id) return;
+    useChallengesStore.setState((s) => {
+      const next = { ...s.checkIns };
+      stats.calendar.data!.forEach((row) => {
+        const key = `${id}:${userId}:${row.date}`;
+        const prev = next[key];
+        next[key] = {
+          id: prev?.id ?? key,
+          challengeId: id,
+          userId,
+          date: row.date,
+          status: row.status,
+          screenshotName: prev?.screenshotName,
+        };
+      });
+      return { checkIns: next };
+    });
+  }, [stats.calendar.data, id, userId]);
+
   // Fallback: Falls Challenge lokal fehlt, aus der DB (Mitgliedschaft) nachladen
   useEffect(() => {
     let cancelled = false;
@@ -55,15 +80,15 @@ export default function ChallengeDetail() {
         .eq("challenge_id", id)
         .maybeSingle();
 
-    if (cancelled) return;
-    const ch = (data as any)?.challenges;
-    if (ch && ch.id) {
-      api.addChallengeFromDB(ch);
-    }
-    setAttemptedFetch(true);
+      if (cancelled) return;
+      const ch = (data as any)?.challenges;
+      if (ch && ch.id) {
+        api.addChallengeFromDB(ch);
+      }
+      setAttemptedFetch(true);
     };
     loadIfMissing();
-    return () => { cancelled = true; };
+    return () => { (cancelled = true); };
   }, [challenge, authUser, id]);
 
   useEffect(() => {
@@ -84,7 +109,7 @@ export default function ChallengeDetail() {
       }
     };
     fetchCode();
-    return () => { cancelled = true; };
+    return () => { (cancelled = true); };
   }, [authUser, id]);
 
   const onConfirm = async () => {
@@ -94,6 +119,7 @@ export default function ChallengeDetail() {
     } else {
       const { error } = await supabase.rpc("upsert_check_in", {
         p_challenge_id: id,
+        p_date: today, // important: RPC erwartet ein Datum
         p_status: result,
         p_screenshot_name: fileName ?? null,
       });
@@ -176,6 +202,49 @@ export default function ChallengeDetail() {
         </div>
       </section>
 
+      {/* Leaderboards */}
+      {authUser && (
+        <section className="space-y-3">
+          <Card>
+            <CardContent className="p-4 space-y-2">
+              <h3 className="font-semibold">Rangliste: Geschafft</h3>
+              <div className="space-y-1">
+                {(stats.success.data ?? []).map((r) => {
+                  const label = r.user_id === authUser.id ? "Du" : `Mitglied (${r.user_id.slice(0, 6)}…)`;
+                  return (
+                    <div key={`s-${r.user_id}`} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="font-medium">{r.days} Tage</span>
+                    </div>
+                  );
+                })}
+                {stats.success.isLoading && <p className="text-xs text-muted-foreground">Lade…</p>}
+                {stats.success.error && <p className="text-xs text-destructive">Konnte Rangliste nicht laden.</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 space-y-2">
+              <h3 className="font-semibold">Rangliste: Nicht geschafft</h3>
+              <div className="space-y-1">
+                {(stats.fail.data ?? []).map((r) => {
+                  const label = r.user_id === authUser.id ? "Du" : `Mitglied (${r.user_id.slice(0, 6)}…)`;
+                  return (
+                    <div key={`f-${r.user_id}`} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="font-medium">{r.days} Tage</span>
+                    </div>
+                  );
+                })}
+                {stats.fail.isLoading && <p className="text-xs text-muted-foreground">Lade…</p>}
+                {stats.fail.error && <p className="text-xs text-destructive">Konnte Rangliste nicht laden.</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
       <section className="space-y-3">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -222,4 +291,3 @@ export default function ChallengeDetail() {
     </MobileShell>
   );
 }
-

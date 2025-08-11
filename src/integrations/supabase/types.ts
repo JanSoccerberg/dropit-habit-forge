@@ -109,6 +109,39 @@ export type Database = {
           },
         ]
       }
+      check_ins: {
+        Row: {
+          challenge_id: string
+          created_at: string
+          date: string
+          id: string
+          screenshot_name: string | null
+          status: Database["public"]["Enums"]["checkin_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          created_at?: string
+          date: string
+          id?: string
+          screenshot_name?: string | null
+          status: Database["public"]["Enums"]["checkin_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          screenshot_name?: string | null
+          status?: Database["public"]["Enums"]["checkin_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       event_logs: {
         Row: {
           challenge_id: string | null
@@ -218,6 +251,27 @@ export type Database = {
           updated_at: string
         }
       }
+      get_fail_counts: {
+        Args: { p_challenge_id: string }
+        Returns: {
+          user_id: string
+          days: number
+        }[]
+      }
+      get_success_counts: {
+        Args: { p_challenge_id: string }
+        Returns: {
+          user_id: string
+          days: number
+        }[]
+      }
+      get_user_calendar: {
+        Args: { p_challenge_id: string; p_user_id?: string }
+        Returns: {
+          date: string
+          status: Database["public"]["Enums"]["checkin_status"]
+        }[]
+      }
       is_creator_of_challenge: {
         Args: { p_challenge_id: string }
         Returns: boolean
@@ -248,9 +302,28 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: string
       }
+      upsert_check_in: {
+        Args: {
+          p_challenge_id: string
+          p_date: string
+          p_status: Database["public"]["Enums"]["checkin_status"]
+          p_screenshot_name?: string
+        }
+        Returns: {
+          challenge_id: string
+          created_at: string
+          date: string
+          id: string
+          screenshot_name: string | null
+          status: Database["public"]["Enums"]["checkin_status"]
+          updated_at: string
+          user_id: string
+        }
+      }
     }
     Enums: {
       bet_rule: "per_day" | "end_fail"
+      checkin_status: "success" | "fail"
       member_role: "creator" | "member"
     }
     CompositeTypes: {
@@ -380,6 +453,7 @@ export const Constants = {
   public: {
     Enums: {
       bet_rule: ["per_day", "end_fail"],
+      checkin_status: ["success", "fail"],
       member_role: ["creator", "member"],
     },
   },
