@@ -192,9 +192,9 @@ export type Database = {
           display_name: string | null
           id: string
           locale: string
-          name: string | null
           push_enabled: boolean
           updated_at: string
+          user_name: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -203,9 +203,9 @@ export type Database = {
           display_name?: string | null
           id: string
           locale?: string
-          name?: string | null
           push_enabled?: boolean
           updated_at?: string
+          user_name?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -214,9 +214,9 @@ export type Database = {
           display_name?: string | null
           id?: string
           locale?: string
-          name?: string | null
           push_enabled?: boolean
           updated_at?: string
+          user_name?: string | null
         }
         Relationships: []
       }
