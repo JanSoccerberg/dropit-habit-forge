@@ -210,7 +210,8 @@ export default function ChallengeDetail() {
               <h3 className="font-semibold">Rangliste: Geschafft</h3>
               <div className="space-y-1">
                 {(stats.success.data ?? []).map((r) => {
-                  const label = r.user_id === authUser.id ? "Du" : `Mitglied (${r.user_id.slice(0, 6)}…)`;
+                  const isMe = r.user_id === authUser.id;
+                  const label = isMe ? `${r.user_name} (Du)` : r.user_name;
                   return (
                     <div key={`s-${r.user_id}`} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{label}</span>
@@ -229,7 +230,8 @@ export default function ChallengeDetail() {
               <h3 className="font-semibold">Rangliste: Nicht geschafft</h3>
               <div className="space-y-1">
                 {(stats.fail.data ?? []).map((r) => {
-                  const label = r.user_id === authUser.id ? "Du" : `Mitglied (${r.user_id.slice(0, 6)}…)`;
+                  const isMe = r.user_id === authUser.id;
+                  const label = isMe ? `${r.user_name} (Du)` : r.user_name;
                   return (
                     <div key={`f-${r.user_id}`} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{label}</span>
@@ -291,3 +293,4 @@ export default function ChallengeDetail() {
     </MobileShell>
   );
 }
+

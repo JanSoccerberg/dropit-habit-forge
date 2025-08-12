@@ -20,7 +20,7 @@ export default function Profile() {
   const { user: authUser, signOut } = useSupabaseAuth();
   useAuthBridge();
 
-  const updateRemote = async (patch: Partial<{ name: string; avatar_url: string | null; locale: string; push_enabled: boolean; dark_mode: boolean }>) => {
+  const updateRemote = async (patch: Partial<{ user_name: string; avatar_url: string | null; locale: string; push_enabled: boolean; dark_mode: boolean }>) => {
     if (!authUser) return;
     const { error } = await supabase.from("profiles").update(patch).eq("id", authUser.id);
     if (error) {
@@ -62,12 +62,12 @@ export default function Profile() {
       <Card>
         <CardContent className="p-4 space-y-4">
           <div className="space-y-2">
-            <Label>Name</Label>
+            <Label>Benutzername</Label>
             <Input
               value={user.name}
               onChange={async (e) => {
                 api.updateProfile({ name: e.target.value });
-                await updateRemote({ name: e.target.value });
+                await updateRemote({ user_name: e.target.value });
               }}
             />
           </div>

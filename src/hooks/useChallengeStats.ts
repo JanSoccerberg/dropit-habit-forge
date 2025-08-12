@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "./useSupabaseAuth";
 
-export type CountRow = { user_id: string; days: number };
+export type CountRow = { user_id: string; user_name: string; days: number };
 export type CalendarRow = { date: string; status: "success" | "fail" };
 
 export function useChallengeStats(challengeId?: string) {
@@ -47,3 +47,4 @@ export function useChallengeStats(challengeId?: string) {
 
   return { success, fail, calendar };
 }
+

@@ -2,11 +2,11 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "./useSupabaseAuth";
-import { api, useChallengesStore } from "@/store/challenges";
+import { api } from "@/store/challenges";
 
 type ProfileRow = {
   id: string;
-  name: string | null;
+  user_name: string | null;
   avatar_url: string | null;
   locale: string;
   push_enabled: boolean;
@@ -49,7 +49,7 @@ export function useAuthBridge() {
       if (!row) {
         const { data: inserted, error: insErr } = await supabase
           .from("profiles")
-          .insert({ id: user.id, name: "User" })
+          .insert({ id: user.id, user_name: "User" })
           .select("*")
           .maybeSingle();
 
@@ -65,7 +65,7 @@ export function useAuthBridge() {
         // Bridge to local store
         api.updateProfile({
           id: user.id,
-          name: row.name ?? "User",
+          name: row.user_name ?? "User",
           avatarUrl: row.avatar_url ?? undefined,
           locale: row.locale,
           pushEnabled: row.push_enabled,

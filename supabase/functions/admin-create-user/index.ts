@@ -1,3 +1,4 @@
+
 // Admin-only Edge Function to create and auto-confirm a user
 // Uses a shared ADMIN_CREATE_USER_TOKEN header for access and the service role key for admin actions
 
@@ -22,7 +23,7 @@ Deno.serve(async (req) => {
     if (!expectedToken || adminToken !== expectedToken) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { "Content-Type": "application/json", ...corsHeaders }),
       });
     }
 
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
     if (!email || typeof email !== "string") {
       return new Response(JSON.stringify({ error: "Missing or invalid 'email'" }), {
         status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { "Content-Type": "application/json", ...corsHeaders }),
       });
     }
 
@@ -41,7 +42,7 @@ Deno.serve(async (req) => {
     if (!SERVICE_ROLE_KEY) {
       return new Response(JSON.stringify({ error: "Service role key not configured" }), {
         status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { "Content-Type": "application/json", ...corsHeaders }),
       });
     }
 
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
     if (createErr || !created?.user) {
       return new Response(JSON.stringify({ error: createErr?.message || "Failed to create user" }), {
         status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { "Content-Type": "application/json", ...corsHeaders }),
       });
     }
 
@@ -66,9 +67,8 @@ Deno.serve(async (req) => {
     try {
       const profileInsert = {
         id: created.user.id,
-        name: name ?? created.user.user_metadata?.name ?? "User",
-        // Optional fields — default values if your schema supports them
-        // locale, push_enabled, dark_mode may have defaults via DB
+        user_name: name ?? created.user.user_metadata?.name ?? "User",
+        // Optional fields — defaults may be set via DB
       } as Record<string, unknown>;
 
       await admin.from("profiles").upsert(profileInsert, { onConflict: "id" });
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
+      headers: { "Content-Type": "application/json", ...corsHeaders }),
     });
   }
 });
@@ -102,3 +102,4 @@ function cryptoRandomPassword(length = 16) {
   }
   return out;
 }
+
