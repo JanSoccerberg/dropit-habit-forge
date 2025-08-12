@@ -1,4 +1,3 @@
-
 import SEO from "@/components/SEO";
 import MobileShell from "@/components/layout/MobileShell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +16,7 @@ import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useChallengeStats } from "@/hooks/useChallengeStats";
+import ChallengeParticipants from "@/components/ChallengeParticipants";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -33,7 +33,6 @@ export default function ChallengeDetail() {
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [attemptedFetch, setAttemptedFetch] = useState(false);
 
-  // New: load stats (leaderboards + calendar) from DB
   const stats = useChallengeStats(id);
 
   if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">{authUser && !attemptedFetch ? "Lade Challenge…" : "Challenge nicht gefunden."}</p></MobileShell>;
@@ -176,6 +175,12 @@ export default function ChallengeDetail() {
         </section>
       )}
 
+      {/* Teilnehmerliste */}
+      <section className="space-y-2">
+        <h3 className="font-semibold">Teilnehmer</h3>
+        <ChallengeParticipants challengeId={id} />
+      </section>
+
       <section className="space-y-2">
         <h3 className="font-semibold">Kalender</h3>
         <div className="grid grid-cols-7 gap-1 text-center">
@@ -188,17 +193,6 @@ export default function ChallengeDetail() {
               <div key={iso} className={`rounded-md px-2 py-3 text-xs ${cls}`}>{d.getDate()}</div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="font-semibold">Teilnehmer</h3>
-        <div className="flex items-center gap-3 text-sm">
-          <div className="h-8 w-8 rounded-full bg-muted" />
-          <div>
-            <p className="font-medium">{user.name}</p>
-            <p className="text-xs text-muted-foreground">Streak: {participation?.streak ?? 0} Tage</p>
-          </div>
         </div>
       </section>
 
@@ -293,4 +287,3 @@ export default function ChallengeDetail() {
     </MobileShell>
   );
 }
-
