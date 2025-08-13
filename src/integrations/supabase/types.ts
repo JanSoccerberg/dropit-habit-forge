@@ -258,6 +258,20 @@ export type Database = {
           user_name: string
         }[]
       }
+      get_cron_jobs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          jobid: number
+          schedule: string
+          command: string
+          nodename: string
+          nodeport: number
+          database: string
+          username: string
+          active: boolean
+          jobname: string
+        }[]
+      }
       get_fail_counts: {
         Args: { p_challenge_id: string }
         Returns: {
