@@ -251,10 +251,18 @@ export type Database = {
           updated_at: string
         }
       }
+      get_challenge_members: {
+        Args: { p_challenge_id: string }
+        Returns: {
+          user_id: string
+          user_name: string
+        }[]
+      }
       get_fail_counts: {
         Args: { p_challenge_id: string }
         Returns: {
           user_id: string
+          user_name: string
           days: number
         }[]
       }
@@ -262,6 +270,7 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: {
           user_id: string
+          user_name: string
           days: number
         }[]
       }
