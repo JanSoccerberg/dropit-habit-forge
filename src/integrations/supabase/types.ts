@@ -301,6 +301,15 @@ export type Database = {
           status: Database["public"]["Enums"]["checkin_status"]
         }[]
       }
+      has_timely_success_checkin: {
+        Args: {
+          p_challenge_id: string
+          p_date: string
+          p_deadline: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       is_creator_of_challenge: {
         Args: { p_challenge_id: string }
         Returns: boolean
@@ -337,6 +346,28 @@ export type Database = {
           p_date: string
           p_screenshot_name?: string
           p_status: Database["public"]["Enums"]["checkin_status"]
+        }
+        Returns: {
+          challenge_id: string
+          created_at: string
+          date: string
+          id: string
+          locked: boolean
+          screenshot_name: string | null
+          source: Database["public"]["Enums"]["checkin_source"]
+          status: Database["public"]["Enums"]["checkin_status"]
+          updated_at: string
+          user_id: string
+        }
+      }
+      upsert_check_in_with_deadline: {
+        Args: {
+          p_challenge_id: string
+          p_date: string
+          p_screenshot_name?: string
+          p_source?: Database["public"]["Enums"]["checkin_source"]
+          p_status: Database["public"]["Enums"]["checkin_status"]
+          p_user_id?: string
         }
         Returns: {
           challenge_id: string

@@ -16,6 +16,7 @@ export interface Challenge {
 }
 
 export type CheckInStatus = "success" | "fail";
+export type CheckInSource = "user" | "system_cron" | "admin";
 
 export interface CheckIn {
   id: string;
@@ -24,6 +25,9 @@ export interface CheckIn {
   date: string; // YYYY-MM-DD
   status: CheckInStatus;
   screenshotName?: string; // placeholder only, no upload
+  locked?: boolean; // true if final and cannot be changed by users
+  source?: CheckInSource; // origin of the check-in
+  createdAt?: string; // ISO date-time for deadline checking
 }
 
 export interface ParticipationReminders {

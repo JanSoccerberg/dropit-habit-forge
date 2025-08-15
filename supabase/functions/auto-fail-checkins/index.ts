@@ -15,12 +15,19 @@ interface ActiveChallenge {
   id: string;
   start_date: string;
   end_date: string;
-  checkin_time: string;
+  checkin_time: string; // TIME format (HH:MM:SS)
 }
 
 interface ChallengeMember {
   user_id: string;
   user_name: string;
+}
+
+interface EvaluationResult {
+  challengeId: string;
+  evaluatedDate: string;
+  failsCreated: number;
+  membersProcessed: number;
 }
 
 async function getActiveChallenges(): Promise<ActiveChallenge[]> {
@@ -53,71 +60,130 @@ async function getChallengeMembers(challengeId: string): Promise<ChallengeMember
   return data || [];
 }
 
-async function hasCheckInForDate(challengeId: string, userId: string, date: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('check_ins')
-    .select('id')
-    .eq('challenge_id', challengeId)
-    .eq('user_id', userId)
-    .eq('date', date)
-    .single();
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-    console.error(`Error checking existing check-in:`, error);
-    return false;
+/**
+ * Determines which date should be evaluated based on current time and challenge check-in deadline
+ */
+function getEvaluationDate(challenge: ActiveChallenge): string | null {
+  const nowUtc = new Date();
+  const todayStr = nowUtc.toISOString().split('T')[0];
+  const yesterdayStr = new Date(nowUtc.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  
+  // Calculate today's deadline (today + checkin_time)
+  const todayDeadline = new Date(`${todayStr}T${challenge.checkin_time}Z`);
+  
+  // Determine evaluation date based on deadline logic
+  let evaluationDate: string;
+  if (nowUtc >= todayDeadline) {
+    // Past deadline for today, evaluate today
+    evaluationDate = todayStr;
+  } else {
+    // Before deadline for today, evaluate yesterday
+    evaluationDate = yesterdayStr;
   }
-
-  return !!data;
+  
+  // Check if evaluation date is within challenge period
+  if (evaluationDate < challenge.start_date || evaluationDate > challenge.end_date) {
+    console.log(`Evaluation date ${evaluationDate} outside challenge period ${challenge.start_date} to ${challenge.end_date}`);
+    return null;
+  }
+  
+  console.log(`Challenge ${challenge.id}: Current time ${nowUtc.toISOString()}, deadline ${todayDeadline.toISOString()}, evaluating ${evaluationDate}`);
+  return evaluationDate;
 }
 
-async function createFailCheckIn(challengeId: string, userId: string, date: string): Promise<void> {
-  const { error } = await supabase.rpc('upsert_check_in', {
+/**
+ * Check if user has a timely successful check-in for the given date
+ */
+async function hasTimelySuccessCheckIn(challengeId: string, userId: string, date: string, deadline: Date): Promise<boolean> {
+  const { data, error } = await supabase.rpc('has_timely_success_checkin', {
     p_challenge_id: challengeId,
+    p_user_id: userId,
     p_date: date,
-    p_status: 'fail',
-    p_screenshot_name: null
+    p_deadline: deadline.toISOString()
   });
 
   if (error) {
-    console.error(`Error creating fail check-in for user ${userId} on ${date}:`, error);
+    console.error(`Error checking timely success for user ${userId} on ${date}:`, error);
+    return false;
+  }
+
+  return data === true;
+}
+
+/**
+ * Create locked fail check-in using the enhanced upsert function
+ */
+async function createLockedFailCheckIn(challengeId: string, userId: string, date: string): Promise<void> {
+  const { error } = await supabase.rpc('upsert_check_in_with_deadline', {
+    p_challenge_id: challengeId,
+    p_date: date,
+    p_status: 'fail',
+    p_screenshot_name: null,
+    p_source: 'system_cron',
+    p_user_id: userId
+  });
+
+  if (error) {
+    console.error(`Error creating locked fail check-in for user ${userId} on ${date}:`, error);
     throw error;
   }
 }
 
-async function processChallenge(challenge: ActiveChallenge): Promise<number> {
-  console.log(`Processing challenge: ${challenge.id}`);
+/**
+ * Process a single challenge with deadline-based evaluation
+ */
+async function processChallenge(challenge: ActiveChallenge): Promise<EvaluationResult> {
+  console.log(`Processing challenge: ${challenge.id} (check-in time: ${challenge.checkin_time})`);
+  
+  const evaluationDate = getEvaluationDate(challenge);
+  if (!evaluationDate) {
+    return {
+      challengeId: challenge.id,
+      evaluatedDate: 'none',
+      failsCreated: 0,
+      membersProcessed: 0
+    };
+  }
   
   const members = await getChallengeMembers(challenge.id);
-  console.log(`Found ${members.length} members for challenge ${challenge.id}`);
+  console.log(`Found ${members.length} members for challenge ${challenge.id}, evaluating ${evaluationDate}`);
   
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  // Calculate deadline for the evaluation date
+  const deadline = new Date(`${evaluationDate}T${challenge.checkin_time}Z`);
   
-  // Only process yesterday - never today or future dates
-  const startDate = new Date(challenge.start_date);
-  const processDate = new Date(Math.max(startDate.getTime(), yesterday.getTime()));
-  
-  if (processDate > yesterday) {
-    console.log(`Challenge ${challenge.id} started today or in future, skipping`);
-    return 0;
-  }
-
   let failsCreated = 0;
 
   for (const member of members) {
-    const hasCheckIn = await hasCheckInForDate(challenge.id, member.user_id, yesterdayStr);
-    
-    if (!hasCheckIn) {
-      console.log(`Creating fail check-in for user ${member.user_name} (${member.user_id}) on ${yesterdayStr}`);
-      await createFailCheckIn(challenge.id, member.user_id, yesterdayStr);
-      failsCreated++;
+    try {
+      const hasTimelySuccess = await hasTimelySuccessCheckIn(
+        challenge.id, 
+        member.user_id, 
+        evaluationDate, 
+        deadline
+      );
+      
+      if (!hasTimelySuccess) {
+        console.log(`Creating locked fail for user ${member.user_name} (${member.user_id}) on ${evaluationDate} - no timely success before ${deadline.toISOString()}`);
+        await createLockedFailCheckIn(challenge.id, member.user_id, evaluationDate);
+        failsCreated++;
+      } else {
+        console.log(`User ${member.user_name} has timely success on ${evaluationDate}`);
+      }
+    } catch (error) {
+      console.error(`Error processing member ${member.user_id}:`, error);
+      // Continue with other members
     }
   }
 
-  console.log(`Created ${failsCreated} fail check-ins for challenge ${challenge.id}`);
-  return failsCreated;
+  const result: EvaluationResult = {
+    challengeId: challenge.id,
+    evaluatedDate: evaluationDate,
+    failsCreated,
+    membersProcessed: members.length
+  };
+  
+  console.log(`Challenge ${challenge.id} complete:`, result);
+  return result;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -133,32 +199,41 @@ const handler = async (req: Request): Promise<Response> => {
     const activeChallenges = await getActiveChallenges();
     console.log(`Found ${activeChallenges.length} active challenges`);
 
+    const results: EvaluationResult[] = [];
     let totalFailsCreated = 0;
 
     for (const challenge of activeChallenges) {
       try {
-        const failsCreated = await processChallenge(challenge);
-        totalFailsCreated += failsCreated;
+        const result = await processChallenge(challenge);
+        results.push(result);
+        totalFailsCreated += result.failsCreated;
       } catch (error) {
         console.error(`Error processing challenge ${challenge.id}:`, error);
         // Continue with other challenges even if one fails
+        results.push({
+          challengeId: challenge.id,
+          evaluatedDate: 'error',
+          failsCreated: 0,
+          membersProcessed: 0
+        });
       }
     }
 
     const endTime = new Date();
     const duration = endTime.getTime() - startTime.getTime();
 
-    const result = {
+    const summary = {
       success: true,
       processedChallenges: activeChallenges.length,
       totalFailsCreated,
       durationMs: duration,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      evaluationResults: results
     };
 
-    console.log('Auto-fail-checkins job completed:', result);
+    console.log('Auto-fail-checkins job completed:', summary);
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify(summary), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

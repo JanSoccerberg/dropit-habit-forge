@@ -44,6 +44,11 @@ export default function ChallengeDetail() {
     return checkIns[key]?.status;
   };
 
+  const getCheckIn = (dateISO: string) => {
+    const key = `${id}:${userId}:${dateISO}`;
+    return checkIns[key];
+  };
+
   const today = todayStr();
   const todayStatus = getStatus(today);
 
@@ -52,7 +57,7 @@ export default function ChallengeDetail() {
     if (!stats.calendar.data || !id) return;
     useChallengesStore.setState((s) => {
       const next = { ...s.checkIns };
-      stats.calendar.data!.forEach((row) => {
+      stats.calendar.data!.forEach((row: any) => {
         const key = `${id}:${userId}:${row.date}`;
         const prev = next[key];
         next[key] = {
@@ -62,6 +67,9 @@ export default function ChallengeDetail() {
           date: row.date,
           status: row.status,
           screenshotName: prev?.screenshotName,
+          locked: row.locked || false,
+          source: row.source || 'user',
+          createdAt: row.created_at || prev?.createdAt,
         };
       });
       return { checkIns: next };
@@ -112,26 +120,60 @@ export default function ChallengeDetail() {
   }, [authUser, id]);
 
   const onConfirm = async () => {
+    if (!id) return;
+    const today = todayStr();
+
+    // Check if today's check-in is locked
+    const todayKey = `${id}:${userId}:${today}`;
+    const existingCheckIn = checkIns[todayKey];
+    if (existingCheckIn?.locked) {
+      toast({ 
+        title: "Check‑in nicht möglich", 
+        description: "Dieser Tag wurde bereits final bewertet und kann nicht mehr geändert werden.", 
+        variant: "destructive" 
+      });
+      setOpen(false);
+      return;
+    }
+
     // Persist to DB if logged in
     if (!authUser) {
       toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
     } else {
-      const { error } = await supabase.rpc("upsert_check_in", {
+      const { error } = await supabase.rpc("upsert_check_in_with_deadline", {
         p_challenge_id: id,
-        p_date: today, // important: RPC erwartet ein Datum
+        p_date: today,
         p_status: result,
         p_screenshot_name: fileName ?? null,
+        p_source: 'user'
       });
       if (error) {
-        toast({ title: "Check‑in fehlgeschlagen", description: error.message, variant: "destructive" });
+        let description = error.message;
+        if (error.message.includes('CHECKIN_LOCKED_FINAL')) {
+          description = "Dieser Check-in wurde bereits final bewertet und kann nicht mehr geändert werden.";
+        } else if (error.message.includes('CHECKIN_DEADLINE_PASSED')) {
+          description = `Die Deadline für heute (${challenge.checkInTime} Uhr) ist bereits abgelaufen.`;
+        }
+        toast({ title: "Check‑in fehlgeschlagen", description, variant: "destructive" });
         return;
       }
     }
 
     // Always update local for current UI
-    api.checkIn(id!, result, fileName);
-    setOpen(false);
-    toast({ title: "Check‑in gespeichert" });
+    try {
+      api.checkIn(id!, result, fileName);
+      setOpen(false);
+      toast({ title: "Check‑in gespeichert" });
+    } catch (error: any) {
+      if (error.message === 'CHECKIN_LOCKED_FINAL') {
+        toast({ 
+          title: "Check‑in nicht möglich", 
+          description: "Dieser Tag wurde bereits final bewertet.", 
+          variant: "destructive" 
+        });
+        setOpen(false);
+      }
+    }
   };
 
   return (
@@ -186,13 +228,44 @@ export default function ChallengeDetail() {
         <div className="grid grid-cols-7 gap-1 text-center">
           {days.map((d) => {
             const iso = d.toISOString().slice(0, 10);
-            const status = getStatus(iso);
+            const checkIn = getCheckIn(iso);
+            const status = checkIn?.status;
+            const isLocked = checkIn?.locked;
             const isPast = iso < today;
-            const cls = status === "success" ? "bg-success/30 text-success" : status === "fail" ? "bg-secondary/30 text-secondary" : isPast ? "bg-muted/50 text-muted-foreground" : "bg-card/60 text-muted-foreground";
+            
+            let cls = "";
+            let lockIndicator = "";
+            
+            if (status === "success") {
+              cls = "bg-success/30 text-success";
+            } else if (status === "fail") {
+              cls = "bg-secondary/30 text-secondary";
+            } else if (isPast) {
+              cls = "bg-muted/50 text-muted-foreground";
+            } else {
+              cls = "bg-card/60 text-muted-foreground";
+            }
+            
+            if (isLocked) {
+              cls += " ring-2 ring-destructive/50";
+              lockIndicator = " 🔒";
+            }
+            
             return (
-              <div key={iso} className={`rounded-md px-2 py-3 text-xs ${cls}`}>{d.getDate()}</div>
+              <div 
+                key={iso} 
+                className={`rounded-md px-2 py-3 text-xs relative ${cls}`}
+                title={isLocked ? "Final bewertet - kann nicht geändert werden" : undefined}
+              >
+                {d.getDate()}{lockIndicator}
+              </div>
             );
           })}
+        </div>
+        {/* Legende */}
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>🔒 = Final bewertet (automatisch um {challenge.checkInTime} Uhr)</p>
+          <p>⚠️ Check-ins müssen vor {challenge.checkInTime} Uhr erfolgen</p>
         </div>
       </section>
 

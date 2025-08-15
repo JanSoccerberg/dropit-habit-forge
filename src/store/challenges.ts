@@ -154,6 +154,13 @@ export const useChallengesStore = create<State & API>((set, get) => ({
     const date = todayStr();
     const ciKey = keyCI(challengeId, userId, date);
     const prev = get().checkIns[ciKey];
+    
+    // Check if existing check-in is locked (final)
+    if (prev?.locked) {
+      console.warn('Cannot modify locked check-in:', prev);
+      throw new Error('CHECKIN_LOCKED_FINAL');
+    }
+    
     const checkIn: CheckIn = {
       id: prev?.id ?? nanoid(),
       challengeId,
@@ -161,6 +168,9 @@ export const useChallengesStore = create<State & API>((set, get) => ({
       date,
       status,
       screenshotName,
+      locked: false,
+      source: 'user',
+      createdAt: new Date().toISOString(),
     };
 
     // update streak

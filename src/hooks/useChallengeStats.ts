@@ -4,7 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSupabaseAuth } from "./useSupabaseAuth";
 
 export type CountRow = { user_id: string; user_name: string; days: number };
-export type CalendarRow = { date: string; status: "success" | "fail" };
+export type CalendarRow = { 
+  date: string; 
+  status: "success" | "fail"; 
+  locked?: boolean; 
+  source?: string; 
+  created_at?: string; 
+};
 
 export function useChallengeStats(challengeId?: string) {
   const { user } = useSupabaseAuth();
