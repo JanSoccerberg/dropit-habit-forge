@@ -297,7 +297,10 @@ export type Database = {
       get_user_calendar: {
         Args: { p_challenge_id: string; p_user_id?: string }
         Returns: {
+          created_at: string
           date: string
+          locked: boolean
+          source: Database["public"]["Enums"]["checkin_source"]
           status: Database["public"]["Enums"]["checkin_status"]
         }[]
       }

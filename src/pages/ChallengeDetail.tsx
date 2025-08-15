@@ -317,7 +317,28 @@ export default function ChallengeDetail() {
       <section className="space-y-3">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button variant="hero" className="w-full">Heute einchecken</Button>
+            {(() => {
+              const todayKey = `${id}:${userId}:${today}`;
+              const todayCheckIn = checkIns[todayKey];
+              const isLocked = todayCheckIn?.locked;
+              const hasCheckIn = !!todayCheckIn;
+              
+              if (isLocked) {
+                return (
+                  <Button variant="secondary" className="w-full" disabled>
+                    {todayCheckIn.status === 'success' ? '✅ Geschafft (final)' : '❌ Nicht geschafft (final)'}
+                  </Button>
+                );
+              } else if (hasCheckIn) {
+                return (
+                  <Button variant="outline" className="w-full">
+                    {todayCheckIn.status === 'success' ? '✅ Geschafft (ändern)' : '❌ Nicht geschafft (ändern)'}
+                  </Button>
+                );
+              } else {
+                return <Button variant="hero" className="w-full">Heute einchecken</Button>;
+              }
+            })()}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
