@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.4"
@@ -115,7 +115,9 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          locked: boolean
           screenshot_name: string | null
+          source: Database["public"]["Enums"]["checkin_source"]
           status: Database["public"]["Enums"]["checkin_status"]
           updated_at: string
           user_id: string
@@ -125,7 +127,9 @@ export type Database = {
           created_at?: string
           date: string
           id?: string
+          locked?: boolean
           screenshot_name?: string | null
+          source?: Database["public"]["Enums"]["checkin_source"]
           status: Database["public"]["Enums"]["checkin_status"]
           updated_at?: string
           user_id: string
@@ -135,7 +139,9 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          locked?: boolean
           screenshot_name?: string | null
+          source?: Database["public"]["Enums"]["checkin_source"]
           status?: Database["public"]["Enums"]["checkin_status"]
           updated_at?: string
           user_id?: string
@@ -261,31 +267,31 @@ export type Database = {
       get_cron_jobs: {
         Args: Record<PropertyKey, never>
         Returns: {
-          jobid: number
-          schedule: string
+          active: boolean
           command: string
+          database: string
+          jobid: number
+          jobname: string
           nodename: string
           nodeport: number
-          database: string
+          schedule: string
           username: string
-          active: boolean
-          jobname: string
         }[]
       }
       get_fail_counts: {
         Args: { p_challenge_id: string }
         Returns: {
+          days: number
           user_id: string
           user_name: string
-          days: number
         }[]
       }
       get_success_counts: {
         Args: { p_challenge_id: string }
         Returns: {
+          days: number
           user_id: string
           user_name: string
-          days: number
         }[]
       }
       get_user_calendar: {
@@ -329,15 +335,17 @@ export type Database = {
         Args: {
           p_challenge_id: string
           p_date: string
-          p_status: Database["public"]["Enums"]["checkin_status"]
           p_screenshot_name?: string
+          p_status: Database["public"]["Enums"]["checkin_status"]
         }
         Returns: {
           challenge_id: string
           created_at: string
           date: string
           id: string
+          locked: boolean
           screenshot_name: string | null
+          source: Database["public"]["Enums"]["checkin_source"]
           status: Database["public"]["Enums"]["checkin_status"]
           updated_at: string
           user_id: string
@@ -346,6 +354,7 @@ export type Database = {
     }
     Enums: {
       bet_rule: "per_day" | "end_fail"
+      checkin_source: "user" | "system_cron" | "admin"
       checkin_status: "success" | "fail"
       member_role: "creator" | "member"
     }
@@ -476,6 +485,7 @@ export const Constants = {
   public: {
     Enums: {
       bet_rule: ["per_day", "end_fail"],
+      checkin_source: ["user", "system_cron", "admin"],
       checkin_status: ["success", "fail"],
       member_role: ["creator", "member"],
     },
