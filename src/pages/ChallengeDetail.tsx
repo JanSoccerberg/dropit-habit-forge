@@ -17,9 +17,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useChallengeStats } from "@/hooks/useChallengeStats";
 import ChallengeParticipants from "@/components/ChallengeParticipants";
+import { useNavigate } from "react-router-dom";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const challenge = useChallengesStore((s) => s.challenges[id!]);
   const progress = useChallengesStore((s) => s.getChallengeProgress(id!));
   const participation = useChallengesStore((s) => s.getUserParticipation(id!));
@@ -32,6 +34,8 @@ export default function ChallengeDetail() {
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [attemptedFetch, setAttemptedFetch] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const stats = useChallengeStats(id);
 
@@ -173,6 +177,39 @@ export default function ChallengeDetail() {
         });
         setOpen(false);
       }
+    }
+  };
+
+  const handleDeleteChallenge = async () => {
+    if (!id || !authUser) return;
+    
+    setIsDeleting(true);
+    try {
+      // Delete from Supabase first
+      const { error } = await supabase
+        .from("challenges")
+        .delete()
+        .eq("id", id);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Remove from local store
+      api.deleteChallenge(id);
+      
+      toast({ title: "Challenge gelöscht", description: "Die Challenge wurde erfolgreich gelöscht." });
+      navigate("/");
+    } catch (error: any) {
+      console.error("Error deleting challenge:", error);
+      toast({ 
+        title: "Fehler beim Löschen", 
+        description: error.message || "Die Challenge konnte nicht gelöscht werden.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
     }
   };
 
@@ -382,6 +419,59 @@ export default function ChallengeDetail() {
           }} />
         </div>
       </section>
+
+      {/* Delete Challenge Button - Only visible to creator */}
+      {authUser && challenge?.creatorId === authUser.id && (
+        <section className="space-y-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div>
+                  <h3 className="font-semibold text-destructive">Challenge löschen</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Diese Aktion kann nicht rückgängig gemacht werden. Alle Teilnehmer, Check-ins und Daten werden unwiderruflich gelöscht.
+                  </p>
+                </div>
+                <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive" className="w-full">
+                      Challenge löschen
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Challenge wirklich löschen?</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Möchtest du die Challenge "{challenge.title}" wirklich löschen? 
+                        Diese Aktion kann nicht rückgängig gemacht werden.
+                      </p>
+                      <div className="flex gap-3">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setDeleteDialogOpen(false)}
+                          className="flex-1"
+                        >
+                          Abbrechen
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          onClick={handleDeleteChallenge}
+                          disabled={isDeleting}
+                          className="flex-1"
+                        >
+                          {isDeleting ? "Lösche..." : "Endgültig löschen"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
     </MobileShell>
   );
 }

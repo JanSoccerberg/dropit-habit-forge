@@ -34,6 +34,8 @@ interface API {
     checkin_time: string;
     screenshot_required: boolean;
     bet_description: string | null;
+    bet_amount: number | null;
+    bet_unit: string | null;
     bet_rule: "per_day" | "end_fail";
     join_code: string;
     creator_id: string;
@@ -46,6 +48,7 @@ interface API {
   getChallengeProgress(challengeId: string): { total: number; elapsed: number; percent: number };
   resetApp(): void;
   updateProfile(patch: Partial<UserProfile>): void;
+  deleteChallenge(challengeId: string): void;
 }
 
 const keyP = (challengeId: string, userId: string) => `${challengeId}:${userId}`;
@@ -205,6 +208,39 @@ export const useChallengesStore = create<State & API>((set, get) => ({
 
   resetApp: () => set(() => ({ challenges: {}, participations: {}, checkIns: {} })),
   updateProfile: (patch) => set((s) => ({ user: { ...s.user, ...patch } })),
+  deleteChallenge: (challengeId) => {
+    const challenge = get().challenges[challengeId];
+    if (!challenge) return;
+    
+    // Remove challenge and all related data
+    set((s) => {
+      const nextChallenges = { ...s.challenges };
+      const nextParticipations = { ...s.participations };
+      const nextCheckIns = { ...s.checkIns };
+      
+      delete nextChallenges[challengeId];
+      
+      // Remove all participations for this challenge
+      Object.keys(nextParticipations).forEach(key => {
+        if (key.startsWith(`${challengeId}:`)) {
+          delete nextParticipations[key];
+        }
+      });
+      
+      // Remove all check-ins for this challenge
+      Object.keys(nextCheckIns).forEach(key => {
+        if (key.startsWith(`${challengeId}:`)) {
+          delete nextCheckIns[key];
+        }
+      });
+      
+      return {
+        challenges: nextChallenges,
+        participations: nextParticipations,
+        checkIns: nextCheckIns
+      };
+    });
+  },
 }));
 
 export type ChallengesAPI = Omit<API, "getChallengeProgress" | "getUserParticipation">;
@@ -218,4 +254,5 @@ export const api = {
     useChallengesStore.getState().checkIn(challengeId, status, screenshotName),
   resetApp: () => useChallengesStore.getState().resetApp(),
   updateProfile: (patch: Partial<UserProfile>) => useChallengesStore.getState().updateProfile(patch),
+  deleteChallenge: (challengeId: string) => useChallengesStore.getState().deleteChallenge(challengeId),
 };
