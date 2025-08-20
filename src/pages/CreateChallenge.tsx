@@ -24,6 +24,8 @@ export default function CreateChallenge() {
   const [checkInTime, setCheckInTime] = useState("22:00");
   const [requireScreenshot, setRequireScreenshot] = useState(false);
   const [stakeText, setStakeText] = useState("");
+  const [stakeAmount, setStakeAmount] = useState<string>("");
+  const [stakeUnit, setStakeUnit] = useState<string>("");
   const [stakeRule, setStakeRule] = useState("per-missed-day");
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -38,6 +40,9 @@ export default function CreateChallenge() {
     // Ensure profile exists, then persist in Supabase (server generates join_code)
     const { error: profErr } = await supabase.rpc("ensure_profile_exists");
     if (profErr) { toast({ title: "Profil-Setup fehlgeschlagen", description: profErr.message, variant: "destructive" }); return; }
+    const betAmountVal = stakeAmount.trim() === "" ? null : Number.parseInt(stakeAmount, 10);
+    const betUnitVal = stakeUnit.trim() === "" ? null : stakeUnit.trim();
+
     const { data: created, error } = await supabase
       .from("challenges")
       .insert({
@@ -48,10 +53,12 @@ export default function CreateChallenge() {
         checkin_time: checkInTime,
         screenshot_required: requireScreenshot,
         bet_description: stakeText || null,
+        bet_amount: betAmountVal,
+        bet_unit: betUnitVal,
         bet_rule: stakeRule === "per-missed-day" ? "per_day" : "end_fail",
         creator_id: user.id,
       })
-      .select("id, join_code, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, creator_id, created_at")
+      .select("id, join_code, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_amount, bet_unit, bet_rule, creator_id, created_at")
       .maybeSingle();
 
     if (error || !created) {
@@ -109,7 +116,20 @@ export default function CreateChallenge() {
             </div>
             <div className="space-y-2">
               <Label>Einsatz</Label>
-              <Input value={stakeText} onChange={(e) => setStakeText(e.target.value)} placeholder="z. B. 5 € pro verpasstem Tag" />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1 col-span-1">
+                  <Label className="text-xs">Betrag</Label>
+                  <Input inputMode="numeric" pattern="[0-9]*" value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="z. B. 5" />
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <Label className="text-xs">Beschreibung/Einheit</Label>
+                  <Input value={stakeUnit} onChange={(e) => setStakeUnit(e.target.value)} placeholder="z. B. Euro, € oder Liegestützen" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Hinweis (freiwillig)</Label>
+                <Input value={stakeText} onChange={(e) => setStakeText(e.target.value)} placeholder="z. B. pro verpasstem Tag, Spende, etc." />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Einsatzregel</Label>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useParams } from "react-router-dom";
 import { useChallengesStore, api } from "@/store/challenges";
 import ProgressRing from "@/components/ProgressRing";
-import { daysBetween, todayStr } from "@/utils/date";
+import { daysBetween, todayStr, toISODate } from "@/utils/date";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -83,7 +83,7 @@ export default function ChallengeDetail() {
       if (challenge || !authUser || !id) return;
       const { data } = await supabase
         .from("challenge_members")
-        .select("challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at )")
+        .select("challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_amount, bet_unit, bet_rule, join_code, creator_id, created_at )")
         .eq("challenge_id", id)
         .maybeSingle();
 
@@ -191,10 +191,10 @@ export default function ChallengeDetail() {
         </CardContent>
       </Card>
 
-      {challenge.stakeText && (
+      {(challenge.stakeText || challenge.stakeAmount) && (
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm">Einsatz: <span className="font-medium">{challenge.stakeText}</span></p>
+            <p className="text-sm">Einsatz: <span className="font-medium">{challenge.stakeAmount ? `${challenge.stakeAmount} ${challenge.stakeUnit ?? ''}` : ''}{challenge.stakeText ? (challenge.stakeAmount ? ' – ' : '') + challenge.stakeText : ''}</span></p>
           </CardContent>
         </Card>
       )}
@@ -227,7 +227,7 @@ export default function ChallengeDetail() {
         <h3 className="font-semibold">Kalender</h3>
         <div className="grid grid-cols-7 gap-1 text-center">
           {days.map((d) => {
-            const iso = d.toISOString().slice(0, 10);
+            const iso = toISODate(d);
             const checkIn = getCheckIn(iso);
             const status = checkIn?.status;
             const isLocked = checkIn?.locked;
@@ -299,10 +299,14 @@ export default function ChallengeDetail() {
                 {(stats.fail.data ?? []).map((r) => {
                   const isMe = r.user_id === authUser.id;
                   const label = isMe ? `${r.user_name} (Du)` : r.user_name;
+                  const amount = (challenge.stakeAmount ?? 0) * (r.days ?? 0);
+                  const unit = challenge.stakeUnit ?? "";
                   return (
                     <div key={`f-${r.user_id}`} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">{label}</span>
-                      <span className="font-medium">{r.days} Tage</span>
+                      <span className="font-medium">
+                        {r.days} Tage{challenge.stakeAmount ? ` · ${amount} ${unit || ''}` : ''}
+                      </span>
                     </div>
                   );
                 })}

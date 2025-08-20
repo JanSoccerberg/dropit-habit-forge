@@ -18,6 +18,8 @@ interface CreateChallengeInput {
   checkInTime: string; // HH:mm
   requireScreenshot: boolean;
   stakeText?: string;
+  stakeAmount?: number;
+  stakeUnit?: string;
   stakeRule: ChallengeRule;
 }
 
@@ -74,6 +76,8 @@ export const useChallengesStore = create<State & API>((set, get) => ({
       checkInTime: input.checkInTime,
       requireScreenshot: input.requireScreenshot,
       stakeText: input.stakeText,
+      stakeAmount: input.stakeAmount,
+      stakeUnit: input.stakeUnit,
       stakeRule: input.stakeRule,
       joinCode,
       creatorId: get().user.id,
@@ -109,6 +113,8 @@ export const useChallengesStore = create<State & API>((set, get) => ({
       checkInTime: row.checkin_time,
       requireScreenshot: row.screenshot_required,
       stakeText: row.bet_description ?? undefined,
+      stakeAmount: typeof row.bet_amount === 'number' ? row.bet_amount : undefined,
+      stakeUnit: row.bet_unit ?? undefined,
       stakeRule: row.bet_rule === 'per_day' ? 'per-missed-day' : 'overall-fail',
       joinCode: row.join_code,
       creatorId: row.creator_id,

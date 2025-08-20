@@ -9,6 +9,8 @@ export interface Challenge {
   checkInTime: string; // HH:mm
   requireScreenshot: boolean;
   stakeText?: string; // free text
+  stakeAmount?: number; // per-fail amount
+  stakeUnit?: string;   // unit/label, e.g., Euro, € or Liegestützen
   stakeRule: ChallengeRule;
   joinCode: string; // 6-char code
   creatorId: string;

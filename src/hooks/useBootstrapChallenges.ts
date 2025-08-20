@@ -28,13 +28,13 @@ export function useBootstrapChallenges() {
         supabase
           .from("challenge_members")
           .select(
-            "challenge_id, challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at )"
+            "challenge_id, challenges ( id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_amount, bet_unit, bet_rule, join_code, creator_id, created_at )"
           )
           .eq("user_id", user.id),
         supabase
           .from("challenges")
           .select(
-            "id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_rule, join_code, creator_id, created_at"
+            "id, title, description, start_date, end_date, checkin_time, screenshot_required, bet_description, bet_amount, bet_unit, bet_rule, join_code, creator_id, created_at"
           )
           .eq("creator_id", user.id),
       ]);
