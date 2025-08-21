@@ -18,6 +18,9 @@ import { toast } from "@/hooks/use-toast";
 import { useChallengeStats } from "@/hooks/useChallengeStats";
 import ChallengeParticipants from "@/components/ChallengeParticipants";
 import { useNavigate } from "react-router-dom";
+import { useProofUpload } from "@/hooks/useProofUpload";
+import { Progress } from "@/components/ui/progress";
+import { DayProofsModal } from "@/components/DayProofsModal";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -32,12 +35,23 @@ export default function ChallengeDetail() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<"success" | "fail">("success");
   const [fileName, setFileName] = useState<string | undefined>(undefined);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadedPath, setUploadedPath] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [proofsModalOpen, setProofsModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [attemptedFetch, setAttemptedFetch] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const stats = useChallengeStats(id);
+  const { uploadAndCheckIn, isUploading, uploadProgress } = useProofUpload();
+
+  const handleDayClick = (date: Date) => {
+    const isoDate = toISODate(date);
+    setSelectedDate(isoDate);
+    setProofsModalOpen(true);
+  };
 
   if (!challenge) return <MobileShell title="Challenge"><p className="text-muted-foreground">{authUser && !attemptedFetch ? "Lade Challenge…" : "Challenge nicht gefunden."}</p></MobileShell>;
 
@@ -123,9 +137,46 @@ export default function ChallengeDetail() {
     return () => { (cancelled = true); };
   }, [authUser, id]);
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validierung
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        toast({
+          title: "Datei zu groß",
+          description: "Maximale Größe: 10MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Kein Bild",
+          description: "Bitte wähle eine Bilddatei aus",
+          variant: "destructive"
+        });
+        return;
+      }
+      setSelectedFile(file);
+      setUploadedPath(null);
+    }
+  };
+
+  // Upload wird jetzt direkt beim Speichern durchgeführt
+
   const onConfirm = async () => {
     if (!id) return;
     const today = todayStr();
+
+    // Pflichtprüfung
+    if (challenge.requireScreenshot && !selectedFile) {
+      toast({
+        title: "Bild erforderlich",
+        description: "Für diese Challenge ist ein Screenshot erforderlich",
+        variant: "destructive"
+      });
+      return;
+    }
 
     // Check if today's check-in is locked
     const todayKey = `${id}:${userId}:${today}`;
@@ -140,43 +191,30 @@ export default function ChallengeDetail() {
       return;
     }
 
-    // Persist to DB if logged in
-    if (!authUser) {
-      toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
-    } else {
-      const { error } = await supabase.rpc("upsert_check_in_with_deadline", {
-        p_challenge_id: id,
-        p_date: today,
-        p_status: result,
-        p_screenshot_name: fileName ?? null,
-        p_source: 'user'
-      });
-      if (error) {
-        let description = error.message;
-        if (error.message.includes('CHECKIN_LOCKED_FINAL')) {
-          description = "Dieser Check-in wurde bereits final bewertet und kann nicht mehr geändert werden.";
-        } else if (error.message.includes('CHECKIN_DEADLINE_PASSED')) {
-          description = `Die Deadline für heute (${challenge.checkInTime} Uhr) ist bereits abgelaufen.`;
+    // Upload und Check-in in einem Schritt
+    if (authUser) {
+      const uploadResult = await uploadAndCheckIn(id, today, userId, selectedFile, result);
+      
+      if (uploadResult.success) {
+        // Update local store
+        try {
+          api.checkIn(id!, result, uploadResult.storagePath || undefined);
+          setOpen(false);
+          setSelectedFile(null);
+          setUploadedPath(null);
+        } catch (error: any) {
+          if (error.message === 'CHECKIN_LOCKED_FINAL') {
+            toast({ 
+              title: "Check‑in nicht möglich", 
+              description: "Dieser Tag wurde bereits final bewertet.", 
+              variant: "destructive" 
+            });
+            setOpen(false);
+          }
         }
-        toast({ title: "Check‑in fehlgeschlagen", description, variant: "destructive" });
-        return;
       }
-    }
-
-    // Always update local for current UI
-    try {
-      api.checkIn(id!, result, fileName);
-      setOpen(false);
-      toast({ title: "Check‑in gespeichert" });
-    } catch (error: any) {
-      if (error.message === 'CHECKIN_LOCKED_FINAL') {
-        toast({ 
-          title: "Check‑in nicht möglich", 
-          description: "Dieser Tag wurde bereits final bewertet.", 
-          variant: "destructive" 
-        });
-        setOpen(false);
-      }
+    } else {
+      toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
     }
   };
 
@@ -289,13 +327,21 @@ export default function ChallengeDetail() {
             }
             
             return (
-              <div 
-                key={iso} 
-                className={`rounded-md px-2 py-3 text-xs relative ${cls}`}
-                title={isLocked ? "Final bewertet - kann nicht geändert werden" : undefined}
+              <Button
+                key={iso}
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 p-0 text-xs relative ${cls}`}
+                onClick={() => handleDayClick(d)}
+                disabled={!isPast && !checkIn}
+                title={isLocked ? "Final bewertet - kann nicht geändert werden" : "Klicken für Beweise"}
               >
-                {d.getDate()}{lockIndicator}
-              </div>
+                {d.getDate()}
+                {!!checkIn?.screenshotName && (
+                  <span className="absolute -top-1 -right-1 text-xs">📷</span>
+                )}
+                {lockIndicator}
+              </Button>
             );
           })}
         </div>
@@ -395,13 +441,59 @@ export default function ChallengeDetail() {
                 <Label htmlFor="r2">Nicht geschafft</Label>
               </div>
             </RadioGroup>
-            {challenge.requireScreenshot && result === "success" && (
-              <div className="space-y-2">
-                <Label>Screenshot (kein Upload – nur Platzhalter)</Label>
-                <Input type="file" onChange={(e) => setFileName(e.target.files?.[0]?.name)} />
+            {/* Screenshot Upload Section */}
+            {(challenge.requireScreenshot || result === "success") && (
+              <div className="space-y-3">
+                <Label htmlFor="proof">
+                  Screenshot {challenge.requireScreenshot && <span className="text-destructive">*</span>}
+                </Label>
+                
+                <Input
+                  id="proof"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  disabled={isUploading}
+                />
+                
+                {selectedFile && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{selectedFile.name}</span>
+                      <span className="text-muted-foreground">
+                        {(selectedFile.size / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                    </div>
+                    
+                    {isUploading && (
+                      <Progress value={uploadProgress} className="w-full" />
+                    )}
+                  </div>
+                )}
+                
+                {uploadedPath && (
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <span>✓</span>
+                    <span>Bild erfolgreich hochgeladen</span>
+                  </div>
+                )}
+                
+                {challenge.requireScreenshot && (
+                  <p className="text-xs text-muted-foreground">
+                    Ein Screenshot ist für diese Challenge erforderlich
+                  </p>
+                )}
               </div>
             )}
-            <Button onClick={onConfirm} variant="hero" className="w-full mt-2">Speichern</Button>
+            
+            <Button 
+              onClick={onConfirm}
+              disabled={challenge.requireScreenshot && !selectedFile}
+              variant="hero" 
+              className="w-full mt-2"
+            >
+              {isUploading ? "Lädt hoch..." : "SPEICHERN"}
+            </Button>
           </DialogContent>
         </Dialog>
 
@@ -471,6 +563,16 @@ export default function ChallengeDetail() {
             </CardContent>
           </Card>
         </section>
+      )}
+
+      {/* Day Proofs Modal */}
+      {selectedDate && (
+        <DayProofsModal
+          open={proofsModalOpen}
+          onOpenChange={setProofsModalOpen}
+          challengeId={id}
+          date={selectedDate}
+        />
       )}
     </MobileShell>
   );
