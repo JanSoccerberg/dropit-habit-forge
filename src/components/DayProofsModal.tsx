@@ -4,9 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { X, Download, Bug } from 'lucide-react';
-import { debugProofs } from '@/utils/debugProofs';
-import { listAllProofs, testFileAccess } from '@/utils/storageTest';
+import { X, Download } from 'lucide-react';
 
 interface DayProof {
   user_id: string;
@@ -38,77 +36,70 @@ export function DayProofsModal({ open, onOpenChange, challengeId, date }: DayPro
   const loadDayProofs = async () => {
     setLoading(true);
     try {
-      // Debug-Funktion aufrufen
-      console.log('🔍 Lade Beweise für:', { challengeId, date });
-      await debugProofs(challengeId, date);
-      
-      // Versuche zuerst die RPC-Funktion
-      let data = null;
-      let error = null;
-      
-      try {
-        const result = await supabase.rpc('get_day_proofs', {
-          p_challenge_id: challengeId,
-          p_date: date
-        });
-        data = result.data;
-        error = result.error;
-      } catch (rpcError) {
-        console.error('❌ RPC-Aufruf fehlgeschlagen:', rpcError);
-        error = rpcError;
-      }
 
-      if (error) {
-        console.error('❌ get_day_proofs Fehler:', error);
+      
+              // Versuche zuerst die RPC-Funktion
+        let data = null;
+        let error = null;
         
-        // Fallback: Direkte Abfrage der check_ins Tabelle
-        console.log('🔄 Versuche Fallback-Abfrage...');
-        const fallbackResult = await supabase
-          .from('check_ins')
-          .select(`
-            user_id,
-            screenshot_name,
-            status,
-            created_at
-          `)
-          .eq('challenge_id', challengeId)
-          .eq('date', date)
-          .not('screenshot_name', 'is', null);
-        
-        if (fallbackResult.error) {
-          console.error('❌ Fallback-Abfrage fehlgeschlagen:', fallbackResult.error);
-          throw fallbackResult.error;
+        try {
+          const result = await supabase.rpc('get_day_proofs', {
+            p_challenge_id: challengeId,
+            p_date: date
+          });
+          data = result.data;
+          error = result.error;
+        } catch (rpcError) {
+          console.error('RPC-Aufruf fehlgeschlagen:', rpcError);
+          error = rpcError;
         }
-        
-        // Konvertiere das Ergebnis in das erwartete Format
-        data = fallbackResult.data?.map((item: any) => ({
-          user_id: item.user_id,
-          username: 'Unbekannt', // Vereinfacht für den Fallback
-          screenshot_name: item.screenshot_name,
-          status: item.status,
-          created_at: item.created_at
-        })) || [];
-        
-        console.log('✅ Fallback-Daten:', data);
-      } else {
-        console.log('✅ get_day_proofs Daten:', data);
-      }
+
+        // Fallback: Direkte Abfrage wenn RPC fehlschlägt
+        if (error || !data) {
+          console.log('Verwende Fallback-Abfrage...');
+          const fallbackResult = await supabase
+            .from('check_ins')
+            .select(`
+              user_id,
+              screenshot_name,
+              status,
+              created_at,
+              profiles!inner(username)
+            `)
+            .eq('challenge_id', challengeId)
+            .eq('date', date)
+            .not('screenshot_name', 'is', null);
+          
+          if (fallbackResult.error) {
+            console.error('Fallback-Abfrage fehlgeschlagen:', fallbackResult.error);
+            setProofs([]);
+            setImageUrls({});
+            return;
+          }
+          
+          // Konvertiere das Ergebnis in das erwartete Format
+          data = fallbackResult.data?.map((item: any) => ({
+            user_id: item.user_id,
+            username: item.profiles?.username || 'Unbekannt',
+            screenshot_name: item.screenshot_name,
+            status: item.status,
+            created_at: item.created_at
+          })) || [];
+        }
 
       setProofs(data || []);
       
       // Generiere signierte URLs für alle Bilder
       const urls: Record<string, string> = {};
       for (const proof of data || []) {
-        console.log('🖼️ Generiere URL für:', proof.screenshot_name);
         const { data: urlData, error: urlError } = await supabase.storage
           .from('proofs')
           .createSignedUrl(proof.screenshot_name, 3600); // 1 Stunde gültig
         
         if (urlError) {
-          console.error('❌ URL-Generierung Fehler für', proof.screenshot_name, ':', urlError);
+          console.error('URL-Generierung Fehler für', proof.screenshot_name, ':', urlError);
         } else if (urlData?.signedUrl) {
           urls[proof.screenshot_name] = urlData.signedUrl;
-          console.log('✅ URL generiert für', proof.screenshot_name);
         }
       }
       setImageUrls(urls);
@@ -160,27 +151,7 @@ export function DayProofsModal({ open, onOpenChange, challengeId, date }: DayPro
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
           <DialogTitle>Beweise für {formatDate(date)}</DialogTitle>
-          <div className="absolute top-4 right-12 flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => debugProofs(challengeId, date)}
-            >
-              <Bug className="h-4 w-4 mr-2" />
-              Debug
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                console.log('🔍 Teste Storage-Zugriff...');
-                const result = await listAllProofs();
-                console.log('📋 Storage-Test Ergebnis:', result);
-              }}
-            >
-              📁 Storage
-            </Button>
-          </div>
+
         </DialogHeader>
 
           {loading ? (
