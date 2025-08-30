@@ -8,6 +8,16 @@ interface State {
   challenges: Record<string, Challenge>;
   participations: Record<string, Participation>; // by challengeId:userId key
   checkIns: Record<string, CheckIn>; // key = challengeId:userId:date
+  addChallengeFromDB(row: any): void;
+  joinChallengeByCode(code: string): { id: string } | { error: string };
+  findByCode(code: string): Challenge | undefined;
+  checkIn(challengeId: string, status: CheckInStatus, screenshotName?: string): void;
+  getUserParticipation(challengeId: string): Participation | undefined;
+  getChallengeProgress(challengeId: string): { total: number; elapsed: number; percent: number };
+  updateProfile(patch: Partial<UserProfile>): void;
+  resetApp(): void;
+  deleteChallenge(challengeId: string): void;
+  updateCheckInFromDB(checkInData: any): void;
 }
 
 interface CreateChallengeInput {
@@ -195,6 +205,26 @@ export const useChallengesStore = create<State & API>((set, get) => ({
     }));
   },
 
+  updateCheckInFromDB: (checkInData: any) => {
+    const ciKey = keyCI(checkInData.challenge_id, checkInData.user_id, checkInData.date);
+    set((s) => ({
+      checkIns: { 
+        ...s.checkIns, 
+        [ciKey]: {
+          id: checkInData.id,
+          challengeId: checkInData.challenge_id,
+          userId: checkInData.user_id,
+          date: checkInData.date,
+          status: checkInData.status,
+          screenshotName: checkInData.screenshot_name,
+          locked: checkInData.locked,
+          source: checkInData.source,
+          createdAt: checkInData.created_at,
+        }
+      }
+    }));
+  },
+
   getUserParticipation: (challengeId) => get().participations[keyP(challengeId, get().user.id)],
 
   getChallengeProgress: (challengeId) => {
@@ -252,6 +282,7 @@ export const api = {
   findByCode: (code: string) => useChallengesStore.getState().findByCode(code),
   checkIn: (challengeId: string, status: CheckInStatus, screenshotName?: string) =>
     useChallengesStore.getState().checkIn(challengeId, status, screenshotName),
+  updateCheckInFromDB: (checkInData: any) => useChallengesStore.getState().updateCheckInFromDB(checkInData),
   resetApp: () => useChallengesStore.getState().resetApp(),
   updateProfile: (patch: Partial<UserProfile>) => useChallengesStore.getState().updateProfile(patch),
   deleteChallenge: (challengeId: string) => useChallengesStore.getState().deleteChallenge(challengeId),

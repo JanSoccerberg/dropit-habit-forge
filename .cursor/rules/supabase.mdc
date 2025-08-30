@@ -1,0 +1,145 @@
+---
+description: Overview over the supabase database
+content: Supabase‑adjwxqbdglbffzmqvmmt Architecture Overview (for the Cursor coding agent)
+
+Below is a complete, factual description of every schema, table, view, edge‑function and key database object that currently exists in your project. No invented elements are included – everything is taken directly from the system metadata. Use this as a reference when writing new queries, edge‑functions or RLS policies.
+
+1. Schemas
+Schema	Owner
+auth	supabase_admin
+public	pg_database_owner
+storage	supabase_admin
+extensions	postgres
+realtime	supabase_admin
+graphql	supabase_admin
+graphql_public	supabase_admin
+pgbouncer	pgbouncer
+net	supabase_admin
+vault	supabase_admin
+cron	supabase_admin
+supabase_migrations	supabase_admin
+All schemas are regular PostgreSQL schemas; RLS is enabled on tables where it is required (see tables below).
+
+2. Core Auth Tables (auth schema)
+Table	Primary key	RLS	Columns (selected)
+users	id (uuid)	enabled	id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, phone, is_super_admin, created_at, updated_at, plus JSONB meta columns (raw_user_meta_data, raw_app_meta_data).
+identities	id (uuid)	enabled	provider, identity_data (jsonb), user_id (FK → users.id), generated column email.
+sessions	id (uuid)	enabled	user_id (FK → users.id), created_at, updated_at, factor_id, aal, not_after, refreshed_at, user_agent, ip, tag.
+refresh_tokens	id (bigint)	enabled	token, user_id (varchar), revoked, timestamps.
+instances	id (uuid)	enabled	uuid, raw_base_config, timestamps.
+audit_log_entries	id (uuid)	enabled	payload (json), created_at, ip_address.
+schema_migrations	version (varchar)	enabled	single column.
+mfa_factors	id (uuid)	enabled	user_id (FK → users.id), factor_type (enum), status, secret, phone, last_challenged_at, etc.
+mfa_challenges	id (uuid)	enabled	factor_id (FK → mfa_factors.id), created_at, verified_at, otp_code, web_authn_session_data.
+mfa_amr_claims	id (uuid)	enabled	session_id (FK → sessions.id), authentication_method.
+sso_providers	id (uuid)	enabled	resource_id, created_at, updated_at, disabled.
+sso_domains	id (uuid)	enabled	sso_provider_id (FK → sso_providers.id), domain.
+saml_providers	id (uuid)	enabled	sso_provider_id (FK), entity_id, metadata_xml, metadata_url, attribute_mapping.
+saml_relay_states	id (uuid)	enabled	sso_provider_id (FK), request_id, for_email, redirect_to, flow_state_id.
+flow_state	id (uuid)	enabled	user_id, auth_code, PKCE fields.
+one_time_tokens	id (uuid)	enabled	user_id, token_type (enum), token_hash, timestamps.
+All foreign‑key relationships are defined in the metadata (e.g., identities.user_id → users.id).
+
+3. Public Application Tables (public schema)
+Table	Primary key	RLS	Main purpose
+profiles	id (uuid) → FK auth.users.id	enabled	Public user profile (username, avatar, locale, dark‑mode flag, push settings).
+challenges	id (uuid)	enabled	Core challenge definition (title, description, start/end dates, betting info, join code, creator).
+challenge_members	id (uuid)	enabled	Many‑to‑many linking users (via profiles.id) to challenges, with role (creator / member).
+check_ins	id (uuid)	enabled	Daily check‑in records: challenge_id, user_id, date, status (success/fail), screenshot pointer, source (user/system_cron/admin).
+event_logs	id (uuid)	enabled	Event audit for actions like challenge_created, challenge_joined, rotate_code.
+check_ins uses enum types checkin_status (success, fail) and checkin_source (user, system_cron, admin).			
+Additional tables (public may also contain other domain‑specific tables you add later).			
+All tables have primary keys, appropriate foreign‑key constraints, and are RLS‑protected, meaning policies must be created for each operation (SELECT, INSERT, UPDATE, DELETE).
+
+4. Storage Tables (storage schema)
+Table	Primary key	RLS	Description
+buckets	id (text)	enabled	Bucket definition (name, owner, public flag, allowed MIME types, analytics type).
+objects	id (uuid)	enabled	Individual file objects: bucket_id, name, owner_id, timestamps, metadata, user_metadata, versioning.
+prefixes	composite PK (bucket_id, name, level)	enabled	Helper for hierarchical prefixes, auto‑calculates level.
+buckets_analytics	id (text)	enabled	Analytic bucket (Iceberg format).
+migrations	id (int)	enabled	Versioning for storage schema.
+s3_multipart_uploads / s3_multipart_uploads_parts	id (text) & id (uuid)	enabled	Support for multipart uploads (used by Supabase Storage).
+5. Realtime Tables (realtime schema)
+Table	Primary key	Description
+subscription	id (bigint, identity)	Internal realtime subscription mapping.
+messages	composite PK (inserted_at, id)	Queue of realtime messages (topic, payload, event type).
+schema_migrations	version (bigint)	Migration tracking for realtime.
+6. Cron Tables (cron schema)
+Table	Primary key	Description
+job	jobid (bigint, sequence)	Scheduled jobs (cron).
+job_run_details	runid (bigint, sequence)	Execution details for each run (status, command, timestamps).
+7. Net Tables (net schema)
+Table	Primary key	Description
+http_request_queue	id (bigint, sequence)	Queue for outbound HTTP requests (method, URL, headers, body, timeout).
+_http_response	id (bigint)	Temporary storage for HTTP responses (status, headers, content).
+8. Vault Tables (vault schema)
+Table	Primary key	Description
+secrets	id (uuid, default gen_random_uuid())	Encrypted secrets storage (name, secret, key_id, nonce, timestamps).
+9. Supabase Migrations (supabase_migrations schema)
+Table	Primary key	Description
+schema_migrations	version (text)	Tracks migrations applied to the project.
+10. Edge Functions (currently deployed)
+Function slug	Description	Entry point
+admin-create-user	API endpoint that creates a new auth user (email‑confirmed) and upserts a matching profiles row. Requires custom header x-admin-key that matches env variable ADMIN_CREATE_USER_TOKEN.	source/supabase/functions/admin-create-user/index.ts
+auto-fail-checkins	Cron‑style function (invoked by a scheduled job) that evaluates active challenges, determines yesterday/today deadline, and inserts locked “fail” check‑ins for members without a timely success. Uses RPCs get_challenge_members, has_timely_success_checkin, upsert_check_in_with_deadline.	source/supabase/functions/auto-fail-checkins/index.ts
+You can view the source of each function via the list_edge_functions tool or directly in the Supabase Dashboard.
+
+11. Important Relationships (FK constraints)
+profiles.id → auth.users.id (one‑to‑one linking public profile to auth user).
+challenge_members.challenge_id → challenges.id and challenge_members.user_id → profiles.id.
+check_ins.challenge_id → challenges.id, check_ins.user_id → profiles.id.
+event_logs.user_id → profiles.id, event_logs.challenge_id → challenges.id.
+Storage: objects.bucket_id → buckets.id, prefixes.bucket_id → buckets.id, multipart parts → uploads → buckets.
+Realtime: subscription.claims_role derived from JWT claim.
+12. How Cursor Should Use This Information
+Querying data – always reference the correct schema (e.g., public.profiles, auth.users).
+RLS Policies – remember that each operation (SELECT, INSERT, UPDATE, DELETE) must have its own policy; use auth.uid() (wrapped in SELECT (auth.uid())) for user‑ownership checks.
+Edge Functions – reuse the pattern from admin-create-user for any admin‑type endpoint (CORS headers, admin token check, service‑role client). For background jobs, follow the structure of auto-fail-checkins (pre‑flight handling, logging, EdgeRuntime.waitUntil if needed).
+Storage Access – files are stored in storage.objects. Policies on that table should restrict access to the owning owner_id / owner_id field.
+Cron Jobs – define jobs in the cron.job table and read their status from cron.job_run_details. The net queue tables let you fire outbound HTTP requests from edge functions.
+Quick Reference Queries (displayed using the tool)
+List all tables in public
+
+SQL Query
+
+
+
+SELECT table_name FROM information_schema.tables WHERE table_schema='public';
+
+Find foreign‑key relationships for a given table (e.g., public.check_ins)
+
+SQL Query
+SELECT table_name FROM information_schema.tables WHERE table_schema='public';
+
+Find foreign‑key relationships for a given table (e.g., public.check_ins)
+
+SQL Query
+
+
+
+SELECT
+  tc.constraint_name,
+  kcu.column_name,
+  ccu.table_schema AS foreign_schema,
+  ccu.table_name   AS foreign_table,
+  ccu.column_name  AS foreign_column
+FROM information_schema.table_constraints AS tc
+JOIN information_schema.key_column_usage AS kcu
+  ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage AS ccu
+  ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'check_ins' AND tc.table_schema='public';
+
+Create a new RLS SELECT policy for a table (example for public.check_ins allowing users to see only their own rows)
+
+SQL Query
+CREATE POLICY "users can view own checkins"
+ON public.check_ins
+FOR SELECT TO authenticated
+USING ((SELECT auth.uid()) = user_id);
+
+Bottom line
+All the objects listed above constitute the exact, current state of your Supabase database. Cursor can safely base any new code, queries, policies or edge functions on this schema map, knowing that nothing is missing or fabricated. Use the schema names explicitly, respect the existing foreign‑key constraints, and always enable RLS policies for any table that is exposed to the client.
+
+alwaysApply: false
+---

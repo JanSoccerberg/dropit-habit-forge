@@ -1,0 +1,376 @@
+---
+description: Logik on how pictures are stored in supabase
+content:Bilder beim Check-in hochladen und in der Kalenderansicht anzeigen. Ablauf aus Nutzersicht:
+
+Nutzer macht einen Check-in und kann ein Bild auswählen.
+Bild wird in Supabase Storage gespeichert.
+Der Pfad wird in der Datenbank beim Check-in gesichert.
+In der Kalenderansicht: Klick auf einen Tag einer Challenge zeigt alle Teilnehmer mit Benutzername, Status grün für Erfolg oder rot für Fehlversuch. Falls Bild vorhanden, Bild unter dem Namen anzeigen. Sonst Text: Kein Bild hochgeladen.
+Akzeptanzkriterien Definition of Done
+
+Ein Nutzer kann beim Check-in ein Bild hochladen. Der Pfad wird gespeichert.
+Die Kalenderansicht eines Tages zeigt alle Teilnehmer mit Benutzername, Status grün oder rot.
+Wenn ein Bild existiert, wird es unter dem Namen angezeigt. Sonst der Text Kein Bild hochgeladen.
+Bucket ist privat. Anzeigen funktioniert über signierte URLs und bleibt nutzbar nach einem Refresh.
+RLS und Storage Rechte verhindern Fremdzugriff. Eigene Einträge sind schreibbar, fremde nicht.
+Keine Brüche in bestehender Navigation und kein Rückgang der Performance in der Kalenderansicht.
+wie die Funktion umgesetzt werden soll:
+
+Feature: Bilder beim Check-in hochladen und im Kalender anzeigen
+Ablauf
+Nutzer lädt Bild beim Check-in hoch.
+Bild wird in Supabase Storage Bucket gespeichert.
+Pfad des Bildes wird in der check_ins-Tabelle gespeichert.
+Im Kalender klickt man auf einen Tag → Liste aller Teilnehmer erscheint.
+Neben Username wird angezeigt: rotes X (Failed) oder grüner Haken (Success).
+Falls Bild hochgeladen, wird es unter dem Nutzernamen angezeigt, sonst Text „Kein Bild hochgeladen“.
+Technische Details & Umsetzung
+Datenbank
+Tabelle: check_ins
+Spalte	Typ	Beschreibung
+id	UUID	Eindeutiger Check-in
+user_id	UUID	Nutzer-ID (join zu profiles)
+challenge_id	UUID	Challenge zugehörig
+date	DATE	Check-in Tag
+status	TEXT	z.B. 'success' oder 'failed'
+screenshot_name	TEXT	Pfad zum Bild im Storage-Bucket
+Supabase Storage
+Bucket Name z.B. checkins
+Bilder werden unter Pfad gespeichert:
+checkins/{challenge_id}/{user_id}/{date}/{uuid}.{ext}
+Frontend (z. B. React oder Cursor)
+Upload-Funktion:
+
+Datei auswählen → Supabase Storage Upload mit Pfad
+Pfad in check_ins.screenshot_name speichern
+Check-in absenden (eventuell via RPC)
+Kalender-Tag Click:
+
+select aller check_ins zu challenge_id und date mit Join auf Nutzerprofil (profiles-Tabelle)
+Für jeden Check-in Benutzername, Status, Bild laden
+Bild URL über createSignedUrl aus Supabase Storage holen (für privaten Bucket)
+UI:
+
+Username + grüner Haken oder rotes X anzeigen
+Bild anzeigen, falls vorhanden
+Sonst Text „Kein Bild hochgeladen“
+Beispiel-Pseudocode fürs Laden der Daten (RPC)
+create or replace function get_checkins_for_day(...
+Beispiel Frontend-Logic für Upload (JS)
+const filePath = `checkins/${challengeId}/${userId}/${date}/${uuidv4()}.${fileExtension}`;
+const{ data, error } = await supabase.storage.from('checkins').upload(filePath, file);
+if
+ (error) 
+throw
+ error;
+// Pfad in Tabelle speichern (Update oder Insert)
+
+await
+ supabase.from(
+'check_ins'
+)
+  .update({ 
+screenshot_name
+: filePath, 
+status
+: 
+'success'
+ })
+  .eq(
+'user_id'
+, userId)
+  .eq(
+'challenge_id'
+, challengeId)
+  .eq(
+'date'
+, date);
+
+
+
+I'll help you create a comprehensive overview for Cursor to understand the Supabase backend for this image upload and calendar view feature. I'll break this down systematically:
+
+Okay dann mach jetzt bitte die overview für cursor. Bitte mache die Übersicht, so dass der KI Agent Cursor damit möglichst bestmöglich arbeiten kann.
+
+
+
+Supabase Backend Übersicht für Cursor: Challenge Check-in Image Upload Feature
+🔍 Systemarchitektur Überblick
+1. Datenbank-Schema
+Tabellen:
+check_ins
+challenges
+challenge_members
+profiles
+event_logs
+2. Technische Anforderungen für Image Upload Feature
+Ziele:
+Bilder beim Check-in hochladen
+Bilder in Kalenderansicht anzeigen
+Strikte Zugriffskontrolle via RLS (Row Level Security)
+📦 Datenstruktur Detailliert
+Tabelle: check_ins
+interface
+ CheckIn {
+  
+id
+: UUID;
+  challenge_id: UUID;
+  user_id: UUID;
+  date: 
+Date
+;
+  status: 
+'success'
+ | 
+'fail'
+;
+  screenshot_name?: 
+string
+; 
+// Pfad im Storage
+
+  locked: 
+boolean
+;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+Speicherung von Screenshots
+Bucket: checkins
+Pfadstruktur: checkins/{challenge_id}/{user_id}/{date}/{uuid}.{ext}
+Bucket-Konfiguration
+Privatsphäre: Privater Bucket
+Zugriffsmethode: Signierte URLs
+Sicherheit: Nur Eigentümer können Dateien sehen/ändern
+🔒 Sicherheitskonzept
+RLS Policies für Check-ins
+Nur Mitglieder der Challenge können Check-ins sehen
+Nutzer können nur eigene Check-ins bearbeiten
+Nur ungesperrte Check-ins können modifiziert werden
+Storage Sicherheit
+Dateizugriff nur für authentifizierte Nutzer
+Pfad-basierte Zugriffskontrolle
+Signierte URLs mit zeitlich begrenztem Zugang
+🚀 Implementierungsansatz für Cursor
+Datenbank-Funktion für Tages-Check-ins
+SQL Query
+
+
+
+CREATE OR REPLACE FUNCTION get_checkins_for_day(
+  p_challenge_id UUID, 
+  p_date DATE
+) RETURNS TABLE (
+  user_id UUID,
+  username TEXT,
+  status TEXT,
+  screenshot_name TEXT
+)
+
+Frontend-Upload-Logik
+async
+ 
+function
+ 
+uploadCheckInImage
+(
+file: File, challengeId: UUID
+) 
+{
+  
+const
+ userId = getCurrentUserId();
+  
+const
+ date = 
+new
+ 
+Date
+();
+  
+const
+ fileExtension = file.name.split(
+'.'
+).pop();
+  
+const
+ filePath = 
+`checkins/
+${challengeId}
+/
+${userId}
+/
+${formatDate(date)}
+/
+${uuidv4()}
+.
+${fileExtension}
+`
+;
+  
+// 1. Upload to Storage
+
+  
+const
+ storageResult = 
+await
+ supabase.storage
+    .from(
+'checkins'
+)
+    .upload(filePath, file);
+  
+// 2. Save check-in with screenshot path
+
+  
+const
+ checkInResult = 
+await
+ supabase
+    .from(
+'check_ins'
+)
+    .insert({
+      
+challenge_id
+: challengeId,
+      
+user_id
+: userId,
+      
+date
+: formatDate(date),
+      
+status
+: 
+'success'
+,
+      
+screenshot_name
+: filePath
+    });
+}
+
+Kalenderansicht Query
+async
+ 
+function
+ 
+getDayCheckIns
+(
+challengeId: UUID, date: 
+Date
+) 
+{
+  
+const
+ { data, error } = 
+await
+ supabase.rpc(
+'get_checkins_for_day'
+, {
+    
+p_challenge_id
+: challengeId,
+    
+p_date
+: formatDate(date)
+  });
+  
+// Für jedes CheckIn: 
+
+  
+// - Benutzername
+
+  
+// - Status (grün/rot)
+
+  
+// - Bild-URL generieren (falls vorhanden)
+
+}
+
+🎯 Cursor Implementation Guidelines
+Wichtigste Punkte
+Nutze Supabase RPC Funktionen
+Implementiere sichere URL-Generierung
+Behandle Fehlerfälle beim Upload
+Caching von Bildern
+Performance-optimierte Bildladung
+Technische Herausforderungen
+Dynamische Pfaderstellung
+Signierte URLs generieren
+Fehlerbehandlung bei Storage/DB-Operationen
+Konsistente Bildgrößen/Formate
+🔍 Zusätzliche Kontextinformationen
+Relevante Supabase Erweiterungen
+pg_net: Async HTTP Operationen
+uuid-ossp: UUID Generierung
+pgcrypto: Zusätzliche Verschlüsselungsfunktionen
+Performance Considerations
+Indexiere challenge_id, user_id, date in check_ins
+Verwende gepoolte Datenbankverbindungen
+Minimiere Netzwerkanfragen
+🚧 Entwicklungs-Checkliste für Cursor
+ Storage Bucket Konfiguration
+ RLS Policies implementieren
+ RPC Funktion für Tages-Check-ins
+ Frontend Upload-Logik
+ Kalenderansicht Rendering
+ Fehler- und Randfalltests
+ Performance-Optimierung
+Empfohlene Erweiterungen
+Komprimierung von Bildern
+Maximal erlaubte Dateigröße
+Unterstützung verschiedener Bildformate
+
+Wie das Bild und sein Pfad zusammenarbeiten
+Schritt	Wer / Was führt aus	Was wird gespeichert	Wo wird es gespeichert
+1. Benutzer wählt Datei	Front‑End (React/JS, Cursor‑Code)	File‑Objekt (Blob)	Im Browser‑Speicher, noch nicht auf Supabase
+2. Pfad ermitteln	Front‑End (Utility‑Funktion)	Pfad‑String, z. B. checkins/7e8a…/c3f1…/2024‑06‑10/3a5f9c.png	Nur als Variable im Front‑End
+3. Bild in Storage‑Bucket hochladen	Supabase Storage API (supabase.storage.from('checkins').upload(path, file))	Das Binär‑Blob wird im Bucket checkins gespeichert unter genau diesem Pfad. Supabase legt das Objekt in der internen storage.objects‑Tabelle an.	Bucket‑Datei, physisch in den Supabase‑Objekt‑Speicher (S3‑ähnlich).
+4. Prüfen, ob Upload erfolgreich	Front‑End (await‑Aufruf)	data‑Objekt enthält Key (= Pfad) und Path.	Keine neue Speicherung, nur Rückmeldung.
+5. Pfad in check_ins‑Tabelle eintragen	Front‑End führt einen INSERT / UPDATE auf der Tabelle check_ins aus (supabase.from('check_ins').insert({…, screenshot_name: path})).	Der Pfad‑String (screenshot_name) wird als Text‑Spalte in der Zeile des Check‑ins gespeichert.	In der relationalen Datenbank (public.check_ins).
+6. Transaktion / Fehler‑Handling	Optional: ein Server‑seitiges Edge‑Function / RPC kann den Upload und das DB‑Insert in einer einzigen Transaktion orchestrieren (z. B. mit supabase.functions.invoke oder einer PL/pgSQL‑Funktion, die http‑Extension nutzt).	Bei Fehler wird entweder das Bild gelöscht oder der DB‑Eintrag nicht erstellt, so dass kein „hängender“ Pfad entsteht.	Beide Systeme bleiben konsistent.
+Warum speichern wir nur den Pfad in check_ins?
+Relationale Daten (Benutzer‑ID, Challenge‑ID, Datum, Status) liegen in einer Tabelle.
+Das Bild selbst ist groß, unstrukturierte Binärdatei – dafür ist ein Objektspeicher (S3‑ähnlich) besser geeignet.
+Der Pfad ist klein, eindeutig und indexierbar, sodass wir schnell alle Check‑ins einer Challenge/Datum ohne das Bild laden können.
+Wer gibt die Anweisung zum Speichern des Pfads?
+Frontend‑Code (oder ein Edge‑Function) bestimmt den gewünschten Pfad und ruft die Storage‑API auf.
+Sobald der Upload erfolgreich zurückgemeldet wird, verwendet derselbe Code denselben Pfad in einem INSERT oder UPDATE auf check_ins.
+Der Supabase‑Client (JS‑SDK) leitet die Anweisungen an den Supabase‑PostgreSQL‑Server weiter – dort wird die Zeile mit dem Pfad gespeichert.
+Wichtige Details zum Pfad‑Format
+Bucket‑Name (z. B. checkins) steht nicht im Pfad‑String, der nur den inneren Schlüssel enthält.
+Das Muster checkins/{challenge_id}/{user_id}/{date}/{uuid}.{ext} sorgt dafür:
+Eindeutigkeit – jede Datei hat einen eigenen UUID‑Dateinamen.
+Partitionierung – später lassen sich z. B. per LIKE 'checkins/7e8a%…' archivieren oder löschen.
+Sicherheits‑Check – RLS‑Policies können prüfen, ob ein Nutzer nur Pfade liest, die zu seiner user_id gehören.
+Zugriff auf das Bild in der UI
+Signierte URL erzeugen
+const
+ { data } = 
+await
+ supabase.storage
+  .from(
+'checkins'
+)
+  .createSignedUrl(screenshot_name, 
+60
+ * 
+60
+); 
+// 1 h
+
+URL im Front‑End nutzen (z. B. <img src={data.signedUrl}>).
+Die Signatur stellt sicher, dass nur autorisierte Nutzer das Bild sehen – das RLS‑Policy für storage.objects darf nur SELECT für den jeweiligen user_id zulassen.
+Zusammenfassung
+Bild → Bucket: Supabase Storage legt das Binär‑Objekt unter dem vom Front‑End generierten Pfad ab.
+Pfad → DB: Der exakt gleiche Pfad‑String wird als screenshot_name in der Zeile des zugehörigen Check‑ins gespeichert.
+Verantwortung: Der Client‑Code (oder ein Edge‑Function) koordiniert beide Schritte; die Datenbank speichert ausschließlich den Pfad, nicht das Bild selbst.
+Sicherheit: RLS schützt sowohl die check_ins‑Zeile als auch das Bucket‑Objekt; signierte URLs garantieren, dass ein Bild nur für die erlaubte Zeit und von autorisierten Nutzern abgerufen werden kann.
+
+alwaysApply: false
+---

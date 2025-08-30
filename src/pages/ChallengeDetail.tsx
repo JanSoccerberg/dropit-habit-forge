@@ -18,6 +18,7 @@ import { toast } from "@/hooks/use-toast";
 import { useChallengeStats } from "@/hooks/useChallengeStats";
 import ChallengeParticipants from "@/components/ChallengeParticipants";
 import { useNavigate } from "react-router-dom";
+import { nanoid } from "nanoid";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -31,11 +32,26 @@ export default function ChallengeDetail() {
 
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<"success" | "fail">("success");
+  const [fileObj, setFileObj] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [attemptedFetch, setAttemptedFetch] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  
+  // Modal für Tagesliste
+  const [dayOpen, setDayOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+  const [dayError, setDayError] = useState<string | null>(null);
+  const [dayItems, setDayItems] = useState<Array<{
+    user_id: string;
+    user_name: string;
+    status: "success" | "fail";
+    screenshot_name: string | null;
+    signed_url?: string | null;
+  }>>([]);
 
   const stats = useChallengeStats(id);
 
@@ -140,43 +156,83 @@ export default function ChallengeDetail() {
       return;
     }
 
-    // Persist to DB if logged in
-    if (!authUser) {
-      toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
-    } else {
-      const { error } = await supabase.rpc("upsert_check_in_with_deadline", {
-        p_challenge_id: id,
-        p_date: today,
-        p_status: result,
-        p_screenshot_name: fileName ?? null,
-        p_source: 'user'
-      });
-      if (error) {
-        let description = error.message;
-        if (error.message.includes('CHECKIN_LOCKED_FINAL')) {
-          description = "Dieser Check-in wurde bereits final bewertet und kann nicht mehr geändert werden.";
-        } else if (error.message.includes('CHECKIN_DEADLINE_PASSED')) {
-          description = `Die Deadline für heute (${challenge.checkInTime} Uhr) ist bereits abgelaufen.`;
-        }
-        toast({ title: "Check‑in fehlgeschlagen", description, variant: "destructive" });
-        return;
-      }
-    }
+    let uploadedPath: string | null = null;
 
-    // Always update local for current UI
     try {
-      api.checkIn(id!, result, fileName);
-      setOpen(false);
-      toast({ title: "Check‑in gespeichert" });
-    } catch (error: any) {
-      if (error.message === 'CHECKIN_LOCKED_FINAL') {
-        toast({ 
-          title: "Check‑in nicht möglich", 
-          description: "Dieser Tag wurde bereits final bewertet.", 
-          variant: "destructive" 
-        });
-        setOpen(false);
+      // 1. Optional: Bild hochladen
+      if (authUser && result === "success" && fileObj) {
+        setUploading(true);
+        const ext = (fileObj.name.split(".").pop() || "jpg").toLowerCase();
+        const rand = nanoid(10);
+        const path = `checkins/${id}/${authUser.id}/${today}/${rand}.${ext}`;
+        
+        const { error: upErr } = await supabase
+          .storage
+          .from("checkins")
+          .upload(path, fileObj, {
+            cacheControl: "31536000",
+            contentType: fileObj.type || "image/jpeg",
+            upsert: false,
+          });
+        
+        if (upErr) throw upErr;
+        uploadedPath = path;
       }
+
+      // 2. Persist Check-in (mit gespeichertem Pfad)
+      if (!authUser) {
+        toast({ title: "Bitte einloggen", description: "Check‑ins werden nur mit Login gespeichert.", variant: "destructive" });
+      } else {
+        const { data: newCheckIn, error } = await supabase.rpc("upsert_check_in_with_deadline", {
+          p_challenge_id: id,
+          p_date: today,
+          p_status: result,
+          p_screenshot_name: uploadedPath ?? null,
+          p_source: 'user'
+        });
+        
+        if (error) {
+          let description = error.message;
+          if (error.message.includes('CHECKIN_LOCKED_FINAL')) {
+            description = "Dieser Check-in wurde bereits final bewertet und kann nicht mehr geändert werden.";
+          } else if (error.message.includes('CHECKIN_DEADLINE_PASSED')) {
+            description = `Die Deadline für heute (${challenge.checkInTime} Uhr) ist bereits abgelaufen.`;
+          }
+          toast({ title: "Check‑in fehlgeschlagen", description, variant: "destructive" });
+          return;
+        }
+
+        // 3. Store mit DB-Daten aktualisieren
+        if (newCheckIn && newCheckIn.length > 0) {
+          api.updateCheckInFromDB(newCheckIn[0]);
+        }
+      }
+
+      // 4. Lokalen Store aktualisieren
+      try {
+        api.checkIn(id!, result, uploadedPath ?? undefined);
+        setOpen(false);
+        setFileObj(null);
+        toast({ title: "Check‑in gespeichert" });
+      } catch (error: any) {
+        if (error.message === 'CHECKIN_LOCKED_FINAL') {
+          toast({ 
+            title: "Check‑in nicht möglich", 
+            description: "Dieser Tag wurde bereits final bewertet.", 
+            variant: "destructive" 
+          });
+          setOpen(false);
+        }
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast({ 
+        title: "Upload fehlgeschlagen", 
+        description: error.message || "Bild konnte nicht hochgeladen werden.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -212,6 +268,52 @@ export default function ChallengeDetail() {
       setDeleteDialogOpen(false);
     }
   };
+
+  // Tagesdaten laden, wenn Dialog geöffnet und Datum gewählt
+  useEffect(() => {
+    const loadDayCheckins = async () => {
+      if (!authUser || !id || !selectedDate || !dayOpen) return;
+      
+      setDayLoading(true);
+      setDayError(null);
+      
+      try {
+        const { data, error } = await supabase.rpc('get_day_checkins', {
+          p_challenge_id: id,
+          p_date: selectedDate
+        });
+        
+        if (error) throw error;
+
+        // Signierte URLs für Bilder generieren
+        const withUrls = await Promise.all(
+          data.map(async (item) => {
+            if (!item.screenshot_name) return { ...item, signed_url: null };
+            
+            const { data: urlData, error: urlErr } = await supabase
+              .storage
+              .from('checkins')
+              .createSignedUrl(item.screenshot_name, 3600);
+              
+            if (urlErr) {
+              console.warn("Signed URL error:", urlErr);
+              return { ...item, signed_url: null };
+            }
+            
+            return { ...item, signed_url: urlData?.signedUrl ?? null };
+          })
+        );
+
+        setDayItems(withUrls);
+      } catch (e: any) {
+        setDayError(e.message || "Konnte Tagesdaten nicht laden.");
+      } finally {
+        setDayLoading(false);
+      }
+    };
+    
+    loadDayCheckins();
+  }, [authUser, id, selectedDate, dayOpen]);
 
   return (
     <MobileShell title={challenge.title}>
@@ -291,8 +393,12 @@ export default function ChallengeDetail() {
             return (
               <div 
                 key={iso} 
-                className={`rounded-md px-2 py-3 text-xs relative ${cls}`}
-                title={isLocked ? "Final bewertet - kann nicht geändert werden" : undefined}
+                className={`rounded-md px-2 py-3 text-xs relative ${cls} cursor-pointer hover:opacity-80 transition-opacity`}
+                title={isLocked ? "Final bewertet - kann nicht geändert werden" : "Klicken für Details"}
+                onClick={() => {
+                  setSelectedDate(iso);
+                  setDayOpen(true);
+                }}
               >
                 {d.getDate()}{lockIndicator}
               </div>
@@ -303,6 +409,7 @@ export default function ChallengeDetail() {
         <div className="text-xs text-muted-foreground space-y-1">
           <p>🔒 = Final bewertet (automatisch um {challenge.checkInTime} Uhr)</p>
           <p>⚠️ Check-ins müssen vor {challenge.checkInTime} Uhr erfolgen</p>
+          <p>💡 Klicke auf einen Tag für Details</p>
         </div>
       </section>
 
@@ -397,11 +504,31 @@ export default function ChallengeDetail() {
             </RadioGroup>
             {challenge.requireScreenshot && result === "success" && (
               <div className="space-y-2">
-                <Label>Screenshot (kein Upload – nur Platzhalter)</Label>
-                <Input type="file" onChange={(e) => setFileName(e.target.files?.[0]?.name)} />
+                <Label>Bild (optional)</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setFileObj(f);
+                    setFileName(f?.name);
+                  }}
+                />
+                {fileObj && (
+                  <p className="text-xs text-muted-foreground">
+                    Ausgewählt: {fileObj.name} ({(fileObj.size / 1024 / 1024).toFixed(2)} MB)
+                  </p>
+                )}
               </div>
             )}
-            <Button onClick={onConfirm} variant="hero" className="w-full mt-2">Speichern</Button>
+            <Button 
+              onClick={onConfirm} 
+              variant="hero" 
+              className="w-full mt-2"
+              disabled={uploading}
+            >
+              {uploading ? "Lade hoch..." : "Speichern"}
+            </Button>
           </DialogContent>
         </Dialog>
 
@@ -448,20 +575,15 @@ export default function ChallengeDetail() {
                         Diese Aktion kann nicht rückgängig gemacht werden.
                       </p>
                       <div className="flex gap-3">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setDeleteDialogOpen(false)}
-                          className="flex-1"
-                        >
+                        <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
                           Abbrechen
                         </Button>
                         <Button 
                           variant="destructive" 
                           onClick={handleDeleteChallenge}
                           disabled={isDeleting}
-                          className="flex-1"
                         >
-                          {isDeleting ? "Lösche..." : "Endgültig löschen"}
+                          {isDeleting ? "Lösche..." : "Challenge löschen"}
                         </Button>
                       </div>
                     </div>
@@ -472,6 +594,62 @@ export default function ChallengeDetail() {
           </Card>
         </section>
       )}
+
+      {/* Tages-Dialog: Teilnehmer & Bilder */}
+      <Dialog open={dayOpen} onOpenChange={(o) => { 
+        setDayOpen(o); 
+        if (!o) { 
+          setDayItems([]); 
+          setDayError(null); 
+        } 
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDate ? `Check-ins am ${selectedDate}` : "Check-ins"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {dayLoading && <p className="text-sm text-muted-foreground">Lade…</p>}
+          {dayError && <p className="text-sm text-destructive">{dayError}</p>}
+
+          {!dayLoading && !dayError && dayItems.length === 0 && (
+            <p className="text-sm text-muted-foreground">Keine Einträge für diesen Tag.</p>
+          )}
+
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {dayItems.map((it) => {
+              const ok = it.status === "success";
+              return (
+                <div key={it.user_id} className="border rounded-md p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium">{it.user_name}</span>
+                    <span className={ok ? "text-green-600" : "text-red-600"}>
+                      {ok ? "✅ Erfolg" : "❌ Fehlversuch"}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    {it.signed_url ? (
+                      <img
+                        src={it.signed_url}
+                        alt="Check-in Bild"
+                        className="w-full max-h-48 object-contain rounded-md bg-muted"
+                        loading="lazy"
+                        onError={(e) => {
+                          console.warn("Image load error:", e);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Kein Bild hochgeladen.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </MobileShell>
   );
 }
