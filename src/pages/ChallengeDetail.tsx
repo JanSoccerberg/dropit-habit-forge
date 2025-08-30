@@ -19,6 +19,7 @@ import { useChallengeStats } from "@/hooks/useChallengeStats";
 import ChallengeParticipants from "@/components/ChallengeParticipants";
 import { useNavigate } from "react-router-dom";
 import { nanoid } from "nanoid";
+import ImageUpload from "@/components/ImageUpload";
 
 export default function ChallengeDetail() {
   const { id = "" } = useParams();
@@ -159,8 +160,8 @@ export default function ChallengeDetail() {
     let uploadedPath: string | null = null;
 
     try {
-      // 1. Optional: Bild hochladen
-      if (authUser && result === "success" && fileObj) {
+      // 1. Optional: Bild hochladen (für beide Status: success und fail)
+      if (authUser && fileObj) {
         setUploading(true);
         const ext = (fileObj.name.split(".").pop() || "jpg").toLowerCase();
         const rand = nanoid(10);
@@ -493,41 +494,41 @@ export default function ChallengeDetail() {
               <DialogTitle>Dein Check‑in</DialogTitle>
             </DialogHeader>
             <RadioGroup value={result} onValueChange={(v) => setResult(v as any)} className="grid grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2 border rounded-md p-3">
-                <RadioGroupItem value="success" id="r1" />
-                <Label htmlFor="r1">Geschafft</Label>
+              <div className="flex items-center space-x-3 border rounded-md p-4 min-h-[60px] cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setResult("success")}>
+                <RadioGroupItem value="success" id="r1" className="scale-125" />
+                <Label htmlFor="r1" className="text-base cursor-pointer flex-1">Geschafft</Label>
               </div>
-              <div className="flex items-center space-x-2 border rounded-md p-3">
-                <RadioGroupItem value="fail" id="r2" />
-                <Label htmlFor="r2">Nicht geschafft</Label>
+              <div className="flex items-center space-x-3 border rounded-md p-4 min-h-[60px] cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setResult("fail")}>
+                <RadioGroupItem value="fail" id="r2" className="scale-125" />
+                <Label htmlFor="r2" className="text-base cursor-pointer flex-1">Nicht geschafft</Label>
               </div>
             </RadioGroup>
-            {challenge.requireScreenshot && result === "success" && (
-              <div className="space-y-2">
-                <Label>Bild (optional)</Label>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] ?? null;
-                    setFileObj(f);
-                    setFileName(f?.name);
-                  }}
-                />
-                {fileObj && (
-                  <p className="text-xs text-muted-foreground">
-                    Ausgewählt: {fileObj.name} ({(fileObj.size / 1024 / 1024).toFixed(2)} MB)
-                  </p>
-                )}
-              </div>
-            )}
+            
+            {/* Bild-Upload immer verfügbar für bessere UX */}
+            <div className="space-y-2">
+              <ImageUpload
+                selectedFile={fileObj}
+                onImageSelect={(file) => {
+                  setFileObj(file);
+                  setFileName(file?.name);
+                }}
+                disabled={uploading}
+              />
+            </div>
             <Button 
               onClick={onConfirm} 
               variant="hero" 
-              className="w-full mt-2"
+              className="w-full mt-4 min-h-[56px] text-lg font-medium"
               disabled={uploading}
             >
-              {uploading ? "Lade hoch..." : "Speichern"}
+              {uploading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Lade hoch...
+                </div>
+              ) : (
+                "Speichern"
+              )}
             </Button>
           </DialogContent>
         </Dialog>
